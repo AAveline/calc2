@@ -1,0 +1,100 @@
+name: pulum
+description: A minimal Pulumi YAML program with the classic Azure provider
+runtime: yaml
+variables:
+  workspaceSharedKeys:
+    fn::invoke:
+      function: azure-native:operationalinsights:getSharedKeys
+      arguments:
+        resourceGroupName: ${resourceGroup.name}
+        workspaceName: ${workspace.name}
+      return: primarySharedKey
+  adminUsername:
+    fn::invoke:
+      function: azure-native:containerregistry:listRegistryCredentials
+      arguments:
+        resourceGroupName: ${resourceGroup.name}
+        registryName: ${registry.name}
+      return: username
+  adminPasswords:
+    fn::invoke:
+      function: azure-native:containerregistry:listRegistryCredentials
+      arguments:
+        resourceGroupName: ${resourceGroup.name}
+        registryName: ${registry.name}
+      return: passwords
+resources:
+  # Create an Azure Resource Group
+  resourceGroup:
+    type: azure:core:ResourceGroup
+    properties:
+      name: rg
+      location: westeurope
+  workspace:
+    type: azure-native:operationalinsights:Workspace
+    properties:
+      location: westeurope
+      resourceGroupName: ${resourceGroup.name}
+      retentionInDays: 30
+      sku:
+        name: PerGB2018
+  managedEnvironment:
+    type: azure-native:app:ManagedEnvironment
+    properties:
+      appLogsConfiguration:
+        logAnalyticsConfiguration:
+          customerId: ${workspace.customerId}
+          sharedKey: ${workspaceSharedKeys}
+      location: westeurope
+      resourceGroupName: ${resourceGroup.name}
+  registry:
+    type: azure-native:containerregistry:Registry
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      location: westeurope
+      sku:
+        name: "Basic"
+      adminUserEnabled: true
+  provider:
+    type: pulumi:providers:docker
+    properties:
+      registryAuth:
+        - address: ${registry.loginServer}
+          username: ${adminUsername}
+          password: ${adminPasswords[0].value}
+  myImage:
+    type: docker:RegistryImage
+    properties:
+      name: ${registry.loginServer}/node-app:v1.0.0
+      build:
+        context: ${pulumi.cwd}/node-app
+    options:
+      provider: ${provider}
+  containerapp:
+    type: azure-native:app:ContainerApp
+    properties:
+      configuration:
+        ingress:
+          external: true
+          targetPort: 80
+        dapr:
+          appPort: 80
+          enabled: true
+          appId: myapp
+          #external: true
+        registries:
+          - server: ${registry.loginServer}
+            username: ${adminUsername}
+            passwordSecretRef: "pwd"
+        secrets:
+          - name: "pwd"
+            value: ${adminPasswords[0].value}
+      location: westeurope
+      managedEnvironmentId: ${managedEnvironment.id}
+      resourceGroupName: ${resourceGroup.name}
+      template:
+        containers:
+          - image: ${myImage.name}
+            name: myapp
+#outputs:
+  #endpoint: https://${containerapp.configuration.ingress.fqdn}
