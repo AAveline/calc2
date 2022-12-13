@@ -6,21 +6,16 @@ use serde_yaml::Value;
 pub mod convertor;
 pub mod typescript;
 
+#[derive(Debug, Clone)]
 struct ContainerAppConfiguration {
-    dapr: Option<DaprConfiguration>,
     name: String,
-    depends_on: String,
-    networks: Vec<String>,
+    depends_on: Option<Vec<String>>,
+    networks: Option<Vec<String>>,
     image: String,
     environment: String,
     ports: Option<HashMap<i32, i32>>,
-}
-
-struct DaprConfiguration {
-    name: String,
-    depends_on: String,
-    network_mode: String,
-    command: Vec<String>,
+    command: Option<Vec<String>>,
+    network_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -51,72 +46,104 @@ pub fn deserialize_yaml(input: &str) -> Option<()> {
                 }
             }
 
-            fn parse_app_configuration() {}
-
-            fn parse_dapr_configuration() -> DaprConfiguration {
-                DaprConfiguration {
-                    name: String::from("name_dapr"),
-                    depends_on: String::from("name"),
-                    network_mode: format!("service:{}", String::from("name")),
-                    command: vec![
-                        "./daprd".to_string(),
-                        "-app-id".to_string(),
-                        String::from("name"),
-                        "-app-port".to_string(),
-                        String::from("port"),
-                        "-placement-host-address".to_string(),
-                        "placement:50006".to_string(),
-                        "air".to_string(),
-                    ],
-                }
-            }
-
             let container_apps = as_mapping.values().filter(filter_by_type);
 
             let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
-            for a in container_apps {
-                let dapr_configuration = a.get("properties")?.get("configuration")?.get("dapr");
+            for app in container_apps {
+                let containers = app
+                    .get("properties")?
+                    .get("template")?
+                    .get("containers")?
+                    .as_sequence()?;
 
-                if dapr_configuration.is_some() {
-                    services.push(ContainerAppConfiguration {
-                        dapr: Some(parse_dapr_configuration()),
-                        name: String::from("name"),
-                        depends_on: String::from("name"),
-                        networks: vec![String::from("name")],
-                        image: String::from("name"),
-                        environment: String::from("name"),
-                        ports: None,
-                    });
-                } else {
-                    services.push(ContainerAppConfiguration {
-                        dapr: None,
-                        name: String::from("name"),
-                        depends_on: String::from("name"),
-                        networks: vec![String::from("name")],
-                        image: String::from("name"),
-                        environment: String::from("name"),
-                        ports: None,
-                    });
+                let dapr_configuration = app.get("properties")?.get("configuration")?.get("dapr");
+
+                fn parse_app_configuration(
+                    container: &Value,
+                    dapr_configuration: Option<&Value>,
+                ) -> Vec<ContainerAppConfiguration> {
+                    let image = match container.get("image") {
+                        Some(name) => name.as_str().unwrap().to_string(),
+                        // Fallback image name: Empty String
+                        None => String::from(""),
+                    };
+
+                    let name = match container.get("name") {
+                        Some(name) => name.as_str().unwrap().to_string(),
+                        // TODO: define fallback value for name, should be yaml service name
+                        None => String::from(""),
+                    };
+
+                    if dapr_configuration.is_some() {
+                        // Push DaprContainerAppConfig too
+                        vec![
+                            ContainerAppConfiguration {
+                                // Get container image
+                                image: String::from(&image),
+                                // Get container name
+                                name: String::from(&name),
+                                depends_on: Some(vec!["placement".to_string()]),
+                                networks: Some(vec![String::from("dapr-network")]),
+                                network_mode: None,
+                                // TODO
+                                environment: String::from("name"),
+                                ports: None,
+                                command: None,
+                            },
+                            // Dapr Sidecar config
+                            ContainerAppConfiguration {
+                                image: String::from("daprio/daprd:edge"),
+                                // Get container name
+                                name: format!("{}_dapr", String::from(&name)),
+                                depends_on: Some(vec![String::from(&name)]),
+                                network_mode: Some(format!("service:{}", String::from(&name))),
+                                // TODO
+                                environment: String::from("name"),
+                                ports: None,
+                                networks: None,
+                                command: Some(vec![
+                                    "./daprd".to_string(),
+                                    "-app-id".to_string(),
+                                    String::from(&name),
+                                    "-app-port".to_string(),
+                                    String::from("port"),
+                                    "-placement-host-address".to_string(),
+                                    "placement:50006".to_string(),
+                                    "air".to_string(),
+                                ]),
+                            },
+                        ]
+                    } else {
+                        vec![ContainerAppConfiguration {
+                            // Get container image
+                            image,
+                            // Get container name
+                            name,
+                            depends_on: None,
+                            // No Dapr network
+                            networks: None,
+                            // TODO
+                            environment: String::from("name"),
+                            network_mode: None,
+                            ports: None,
+                            command: None,
+                        }]
+                    }
                 }
-                println!("{:?}", dapr_configuration);
+
+                let mut a: Vec<ContainerAppConfiguration> = containers
+                    .iter()
+                    .flat_map(|val| parse_app_configuration(val, dapr_configuration))
+                    .collect();
+
+                services.append(&mut a);
             }
 
-            /*
+            for s in services {
+                println!("{:?}", s);
+            }
 
-                Ici le but est le suivant. Il s'agit d'extraire deux resources principales dans un premier temps:
-                - les applications containerapps qui deviendront des container dans docker compose
-                - les services dapr qui deviendront des sidecars dans docker compose
-
-                La méthodologie est donc la suivante:
-                    - Créer un Vec qui contiendra les applications container apps et leur sidecar afférents
-                    - Trouver et extraire les applications containers apps
-                    - Trouver pour chaque application container apps la propriété dapr si elle existe
-                        - si non, alors pousser dans le Vec l'application sous forme de service
-                        - si oui, alors pousser dans le Vec
-                            - l'application sous forme de service
-                            - le sidecar dapr
-            */
             Some(())
         }
 
@@ -129,7 +156,7 @@ pub struct Pulumi {
 }
 
 pub trait Convertor {
-    fn deserialize_value(&self, extension: Extension, input: &str) -> Result<(), ()>;
+    fn deserialize_value(&self, input: &str) -> Result<(), ()>;
 }
 
 impl Pulumi {
@@ -140,8 +167,8 @@ impl Pulumi {
 }
 
 impl Convertor for Pulumi {
-    fn deserialize_value(&self, extension: Extension, input: &str) -> Result<(), ()> {
-        match extension {
+    fn deserialize_value(&self, input: &str) -> Result<(), ()> {
+        match self.language {
             Extension::Yaml => {
                 if let deserialized = Some(deserialize_yaml(input)) {
                     Ok(())
