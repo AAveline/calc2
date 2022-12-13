@@ -1,7 +1,7 @@
 pub mod convertor;
 
 use clap::{Parser, ValueEnum};
-use convertor::{Convertor, Extension, Pulumi};
+use convertor::{serialize_to_compose, Convertor, Extension, Pulumi};
 use std::{fs, path::Path};
 
 #[derive(Parser, Debug)]
@@ -42,7 +42,7 @@ fn parse_extension(filename: &str) -> Result<Extension, Extension> {
     }
 }
 
-fn main() -> Result<(), serde_yaml::Error> {
+fn main() -> Result<(), ()> {
     let args = Args::parse();
 
     let file = fs::read_to_string(&args.input);
@@ -56,7 +56,17 @@ fn main() -> Result<(), serde_yaml::Error> {
 
             match args.provider {
                 Provider::Pulumi => {
-                    Pulumi::new(args.output, &extension).deserialize_value(&file);
+                    match Pulumi::new(args.output, &extension).deserialize_value(&file) {
+                        Ok(value) => {
+                            let a = match serialize_to_compose(value) {
+                                Ok(v) => v,
+                                Err(v) => vec![],
+                            };
+                            fs::write("docker-compose.yml", a).expect("Should write file");
+                            // println!("{:?}", a)
+                        }
+                        Err(e) => todo!(),
+                    };
                 }
                 Provider::Azure => todo!(),
                 Provider::Terraform => todo!(),

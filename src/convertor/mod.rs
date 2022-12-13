@@ -1,13 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde::ser::{SerializeStruct};
+
 use serde_yaml::Value;
 
 pub mod convertor;
 pub mod typescript;
 
 #[derive(Debug, Clone)]
-struct ContainerAppConfiguration {
+pub struct ContainerAppConfiguration {
     name: String,
     depends_on: Option<Vec<String>>,
     networks: Option<Vec<String>>,
@@ -27,7 +29,7 @@ pub enum Extension {
     NotSupported,
 }
 
-pub fn deserialize_yaml(input: &str) -> Option<()> {
+pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
 
@@ -139,24 +141,41 @@ pub fn deserialize_yaml(input: &str) -> Option<()> {
 
                 services.append(&mut a);
             }
-
-            for s in services {
-                println!("{:?}", s);
-            }
-
-            Some(())
+            /*
+                       for s in services {
+                           println!("{:?}", s);
+                       }
+            */
+            Some(services)
         }
 
         Err(e) => None,
     }
 }
+
+pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
+    let mut buffer = Vec::new();
+    let mut ser = serde_yaml::Serializer::new(&mut buffer);
+
+    let mut object = BTreeMap::new();
+
+    for service in services {
+        let a = BTreeMap::new();
+        a.insert(key, value)
+        object.insert(service.name, 107);
+    }
+    object.serialize(&mut ser);
+    Ok(buffer)
+}
+
 pub struct Pulumi<'a> {
     output: String,
     language: &'a Extension,
 }
 
 pub trait Convertor {
-    fn deserialize_value(&self, input: &str) -> Result<(), ()>;
+    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()>;
+    fn serialize_value(&self) -> Result<(), ()>;
 }
 
 impl Pulumi<'_> {
@@ -167,19 +186,19 @@ impl Pulumi<'_> {
 }
 
 impl Convertor for Pulumi<'_> {
-    fn deserialize_value(&self, input: &str) -> Result<(), ()> {
+    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()> {
         match self.language {
-            Extension::Yaml => {
-                if let deserialized = Some(deserialize_yaml(input)) {
-                    Ok(())
-                } else {
-                    // No data to process, exit
-                    Err(())
-                }
-            }
+            Extension::Yaml => match deserialize_yaml(input) {
+                Some(value) => Ok(value),
+                None => Err(()),
+            },
             Extension::Typescript => todo!(),
             // Return an error with context
             _ => Err(()),
         }
+    }
+
+    fn serialize_value(&self) -> Result<(), ()> {
+        Ok(())
     }
 }
