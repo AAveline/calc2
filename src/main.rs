@@ -56,7 +56,7 @@ fn main() -> Result<(), serde_yaml::Error> {
 
             match args.provider {
                 Provider::Pulumi => {
-                    Pulumi::new(args.output, extension.clone()).deserialize_value(&file);
+                    Pulumi::new(args.output, &extension).deserialize_value(&file);
                 }
                 Provider::Azure => todo!(),
                 Provider::Terraform => todo!(),

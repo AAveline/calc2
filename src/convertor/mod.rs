@@ -150,23 +150,23 @@ pub fn deserialize_yaml(input: &str) -> Option<()> {
         Err(e) => None,
     }
 }
-pub struct Pulumi {
+pub struct Pulumi<'a> {
     output: String,
-    language: Extension,
+    language: &'a Extension,
 }
 
 pub trait Convertor {
     fn deserialize_value(&self, input: &str) -> Result<(), ()>;
 }
 
-impl Pulumi {
-    pub fn new(output: String, language: Extension) -> Pulumi {
+impl Pulumi<'_> {
+    pub fn new(output: String, language: &Extension) -> Pulumi {
         // Test if the language is supported for the provider
         Pulumi { output, language }
     }
 }
 
-impl Convertor for Pulumi {
+impl Convertor for Pulumi<'_> {
     fn deserialize_value(&self, input: &str) -> Result<(), ()> {
         match self.language {
             Extension::Yaml => {
