@@ -184,6 +184,11 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 }
 
 fn cast_struct_as_value(mut acc: Mapping, service: &ContainerAppConfiguration) -> Mapping {
+    /*
+    let pruned_service = serde_yaml::to_value(&service)
+        .iter()
+        .fold(Mapping::new(), |acc, &x| {});
+        */
     acc.insert(
         serde_yaml::to_value(&service.name).unwrap(),
         serde_yaml::to_value(&service).unwrap(),
@@ -208,7 +213,7 @@ fn default_configuration() -> ContainerAppConfiguration {
     }
 }
 
-fn merge_configuration(mut configuration: Mapping, services: Mapping) -> Mapping {
+fn merge_configuration_with_networks(mut configuration: Mapping, services: Mapping) -> Mapping {
     // Generate API version
     configuration.insert(
         serde_yaml::to_value("version").unwrap(),
@@ -220,6 +225,25 @@ fn merge_configuration(mut configuration: Mapping, services: Mapping) -> Mapping
         serde_yaml::to_value(services).unwrap(),
     );
 
+    let mut dapr_network = Mapping::new();
+
+    dapr_network.insert(
+        serde_yaml::to_value("driver").unwrap(),
+        serde_yaml::to_value("default").unwrap(),
+    );
+
+    let mut networks = Mapping::new();
+
+    networks.insert(
+        serde_yaml::to_value("dapr-network").unwrap(),
+        serde_yaml::to_value(dapr_network).unwrap(),
+    );
+
+    configuration.insert(
+        serde_yaml::to_value("networks").unwrap(),
+        serde_yaml::to_value(networks).unwrap(),
+    );
+
     configuration
 }
 
@@ -229,7 +253,7 @@ pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<
         .iter()
         .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x)); //serde_yaml::to_value(&services).unwrap();
 
-    let configuration = merge_configuration(Mapping::new(), as_value);
+    let configuration = merge_configuration_with_networks(Mapping::new(), as_value);
 
     /*
         Append this values to docker-compose.yml

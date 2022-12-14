@@ -52,3 +52,6 @@ services:
     - -port
     - '50006'
     network_mode: null
+networks:
+  dapr-network:
+    driver: default
