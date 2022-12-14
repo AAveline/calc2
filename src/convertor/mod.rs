@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use serde_yaml::Value;
+use serde_yaml::{Mapping, Value};
 
 pub mod convertor;
 pub mod typescript;
@@ -13,8 +13,8 @@ pub struct ContainerAppConfiguration {
     depends_on: Option<Vec<String>>,
     networks: Option<Vec<String>>,
     image: String,
-    environment: String,
-    ports: Option<HashMap<i32, i32>>,
+    environment: Option<Vec<String>>,
+    ports: Option<Vec<String>>,
     command: Option<Vec<String>>,
     network_mode: Option<String>,
 }
@@ -123,7 +123,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                                 networks: Some(vec![String::from("dapr-network")]),
                                 network_mode: None,
                                 // TODO
-                                environment: String::from("name"),
+                                environment: None,
                                 ports: None,
                                 command: None,
                             },
@@ -135,7 +135,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                                 depends_on: Some(vec![String::from(&name)]),
                                 network_mode: Some(format!("service:{}", String::from(&name))),
                                 // TODO
-                                environment: String::from("name"),
+                                environment: None,
                                 ports: None,
                                 networks: None,
                                 command: Some(vec![
@@ -160,7 +160,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                             // No Dapr network
                             networks: None,
                             // TODO
-                            environment: String::from("name"),
+                            environment: None,
                             network_mode: None,
                             ports: None,
                             command: None,
@@ -183,12 +183,56 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     }
 }
 
+fn cast_struct_as_value(mut acc: Mapping, service: &ContainerAppConfiguration) -> Mapping {
+    acc.insert(
+        serde_yaml::to_value(&service.name).unwrap(),
+        serde_yaml::to_value(&service).unwrap(),
+    );
+    acc
+}
+
+fn default_configuration() -> ContainerAppConfiguration {
+    ContainerAppConfiguration {
+        name: String::from("placement"),
+        ports: Some(vec!["5006:5006".to_string()]),
+        networks: Some(vec!["dapr-network".to_string()]),
+        image: "daprio/dapr".to_string(),
+        command: Some(vec![
+            "./placement".to_string(),
+            "-port".to_string(),
+            "50006".to_string(),
+        ]),
+        depends_on: None,
+        environment: None,
+        network_mode: None,
+    }
+}
+
+fn merge_configuration(mut configuration: Mapping, services: Mapping) -> Mapping {
+    // Generate API version
+    configuration.insert(
+        serde_yaml::to_value("version").unwrap(),
+        serde_yaml::to_value("3.9").unwrap(),
+    );
+
+    configuration.insert(
+        serde_yaml::to_value("services").unwrap(),
+        serde_yaml::to_value(services).unwrap(),
+    );
+
+    configuration
+}
+
 pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
-    let as_value = serde_yaml::to_value(&services).unwrap();
+    let as_value = vec![services, vec![default_configuration()]]
+        .concat()
+        .iter()
+        .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x)); //serde_yaml::to_value(&services).unwrap();
+
+    let configuration = merge_configuration(Mapping::new(), as_value);
 
     /*
         Append this values to docker-compose.yml
-        version: "3.9"
         placement:
             image: "daprio/dapr"
             command: [ "./placement", "-port", "50006" ]
@@ -202,7 +246,7 @@ pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<
                 driver: default
     */
 
-    Ok(serde_yaml::to_string(&as_value)
+    Ok(serde_yaml::to_string(&configuration)
         .unwrap()
         .as_bytes()
         .to_vec())

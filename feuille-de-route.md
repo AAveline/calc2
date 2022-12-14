@@ -43,4 +43,8 @@ cf parser précédent.
     - cli
 
 
-- 
+
+# TODO:
+Ignorer les champs qui sont None lors de la serialization compose
+Parser Typescript pour Pulumi
+

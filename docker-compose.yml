@@ -1,35 +1,54 @@
-- name: myapp
-  depends_on:
-  - placement
-  networks:
-  - dapr-network
-  image: ${myImage.name}
-  environment: name
-  ports: null
-  command: null
-  network_mode: null
-- name: myapp_dapr
-  depends_on:
-  - myapp
-  networks: null
-  image: daprio/daprd:edge
-  environment: name
-  ports: null
-  command:
-  - ./daprd
-  - -app-id
-  - myapp
-  - -app-port
-  - port
-  - -placement-host-address
-  - placement:50006
-  - air
-  network_mode: service:myapp
-- name: myappbis
-  depends_on: null
-  networks: null
-  image: ${myImage.name}
-  environment: name
-  ports: null
-  command: null
-  network_mode: null
+version: '3.9'
+services:
+  myapp:
+    name: myapp
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    image: ${myImage.name}
+    environment: null
+    ports: null
+    command: null
+    network_mode: null
+  myapp_dapr:
+    name: myapp_dapr
+    depends_on:
+    - myapp
+    networks: null
+    image: daprio/daprd:edge
+    environment: null
+    ports: null
+    command:
+    - ./daprd
+    - -app-id
+    - myapp
+    - -app-port
+    - port
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:myapp
+  myappbis:
+    name: myappbis
+    depends_on: null
+    networks: null
+    image: ${myImage.name}
+    environment: null
+    ports: null
+    command: null
+    network_mode: null
+  placement:
+    name: placement
+    depends_on: null
+    networks:
+    - dapr-network
+    image: daprio/dapr
+    environment: null
+    ports:
+    - 5006:5006
+    command:
+    - ./placement
+    - -port
+    - '50006'
+    network_mode: null
