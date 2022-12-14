@@ -1,14 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
-use serde::ser::{SerializeStruct};
 
 use serde_yaml::Value;
 
 pub mod convertor;
 pub mod typescript;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerAppConfiguration {
     name: String,
     depends_on: Option<Vec<String>>,
@@ -27,6 +26,41 @@ pub enum Extension {
     Json,
     Bicep,
     NotSupported,
+}
+
+pub struct Pulumi<'a> {
+    output: String,
+    language: &'a Extension,
+}
+
+pub trait Convertor {
+    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()>;
+    fn serialize_value(&self) -> Result<(), ()>;
+}
+
+impl Pulumi<'_> {
+    pub fn new(output: String, language: &Extension) -> Pulumi {
+        // Test if the language is supported for the provider
+        Pulumi { output, language }
+    }
+}
+
+impl Convertor for Pulumi<'_> {
+    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()> {
+        match self.language {
+            Extension::Yaml => match deserialize_yaml(input) {
+                Some(value) => Ok(value),
+                None => Err(()),
+            },
+            Extension::Typescript => todo!(),
+            // Return an error with context
+            _ => Err(()),
+        }
+    }
+
+    fn serialize_value(&self) -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
@@ -141,11 +175,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 
                 services.append(&mut a);
             }
-            /*
-                       for s in services {
-                           println!("{:?}", s);
-                       }
-            */
+
             Some(services)
         }
 
@@ -154,51 +184,26 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 }
 
 pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
-    let mut buffer = Vec::new();
-    let mut ser = serde_yaml::Serializer::new(&mut buffer);
+    let as_value = serde_yaml::to_value(&services).unwrap();
 
-    let mut object = BTreeMap::new();
+    /*
+        Append this values to docker-compose.yml
+        version: "3.9"
+        placement:
+            image: "daprio/dapr"
+            command: [ "./placement", "-port", "50006" ]
+            ports:
+            - "50006:50006"
+            networks:
+            - dapr-network
 
-    for service in services {
-        let a = BTreeMap::new();
-        a.insert(key, value)
-        object.insert(service.name, 107);
-    }
-    object.serialize(&mut ser);
-    Ok(buffer)
-}
+        networks:
+            dapr-network:
+                driver: default
+    */
 
-pub struct Pulumi<'a> {
-    output: String,
-    language: &'a Extension,
-}
-
-pub trait Convertor {
-    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()>;
-    fn serialize_value(&self) -> Result<(), ()>;
-}
-
-impl Pulumi<'_> {
-    pub fn new(output: String, language: &Extension) -> Pulumi {
-        // Test if the language is supported for the provider
-        Pulumi { output, language }
-    }
-}
-
-impl Convertor for Pulumi<'_> {
-    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()> {
-        match self.language {
-            Extension::Yaml => match deserialize_yaml(input) {
-                Some(value) => Ok(value),
-                None => Err(()),
-            },
-            Extension::Typescript => todo!(),
-            // Return an error with context
-            _ => Err(()),
-        }
-    }
-
-    fn serialize_value(&self) -> Result<(), ()> {
-        Ok(())
-    }
+    Ok(serde_yaml::to_string(&as_value)
+        .unwrap()
+        .as_bytes()
+        .to_vec())
 }
