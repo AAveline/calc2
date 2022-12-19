@@ -1,5 +1,3 @@
-use std::collections::{BTreeMap, HashMap};
-
 use serde::{Deserialize, Serialize};
 
 use serde_yaml::{Mapping, Value};
@@ -70,6 +68,12 @@ impl Convertor for Pulumi<'_> {
     }
 }
 
+fn check_and_match_reference(resources: &Value, reference: String) {
+    let a = resources.get(reference);
+
+    println!("{:?}", a)
+}
+
 pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
@@ -81,15 +85,25 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 
             // If resources exists, then iterate over containersApp applications
             let as_mapping = resources.as_mapping()?;
-
-            fn filter_by_type(val: &&Value) -> bool {
+            check_and_match_reference(resources, "myImage".to_string());
+            fn filter_by_type(val: &&Value, resource_type: &str) -> bool {
                 match val.get("type") {
-                    Some(x) => x.as_str() == Some("azure-native:app:ContainerApp"),
+                    Some(x) => x.as_str() == Some(resource_type),
                     None => false,
                 }
             }
 
-            let container_apps = as_mapping.values().filter(filter_by_type);
+            let container_apps = as_mapping
+                .values()
+                .filter(|x| filter_by_type(x, "azure-native:app:ContainerApp"));
+
+            let images = as_mapping
+                .values()
+                .filter(|x| filter_by_type(x, "docker:RegistryImage"));
+
+            for i in images {
+                println!("{:?}", i);
+            }
 
             let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
