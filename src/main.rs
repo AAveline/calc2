@@ -1,11 +1,9 @@
-pub mod convertor;
 pub mod pulumi;
 pub mod serializer;
 
 use clap::{Parser, ValueEnum};
-use convertor::serialize_to_compose;
 use pulumi::Pulumi;
-use serializer::{Extension, Serializer};
+use serializer::{serialize_to_compose, Extension, Serializer};
 
 use std::{fs, path::Path};
 
