@@ -9,13 +9,20 @@ pub mod typescript;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerAppConfiguration {
+    #[serde(skip_serializing)]
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     depends_on: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     networks: Option<Vec<String>>,
     image: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     environment: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ports: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     command: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     network_mode: Option<String>,
 }
 
@@ -99,6 +106,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                     container: &Value,
                     dapr_configuration: Option<&Value>,
                 ) -> Vec<ContainerAppConfiguration> {
+                    // Handle build  context
                     let image = match container.get("image") {
                         Some(name) => name.as_str().unwrap().to_string(),
                         // Fallback image name: Empty String
@@ -184,11 +192,6 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 }
 
 fn cast_struct_as_value(mut acc: Mapping, service: &ContainerAppConfiguration) -> Mapping {
-    /*
-    let pruned_service = serde_yaml::to_value(&service)
-        .iter()
-        .fold(Mapping::new(), |acc, &x| {});
-        */
     acc.insert(
         serde_yaml::to_value(&service.name).unwrap(),
         serde_yaml::to_value(&service).unwrap(),
@@ -251,24 +254,9 @@ pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<
     let as_value = vec![services, vec![default_configuration()]]
         .concat()
         .iter()
-        .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x)); //serde_yaml::to_value(&services).unwrap();
+        .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x));
 
     let configuration = merge_configuration_with_networks(Mapping::new(), as_value);
-
-    /*
-        Append this values to docker-compose.yml
-        placement:
-            image: "daprio/dapr"
-            command: [ "./placement", "-port", "50006" ]
-            ports:
-            - "50006:50006"
-            networks:
-            - dapr-network
-
-        networks:
-            dapr-network:
-                driver: default
-    */
 
     Ok(serde_yaml::to_string(&configuration)
         .unwrap()
