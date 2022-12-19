@@ -1,7 +1,12 @@
 pub mod convertor;
+pub mod pulumi;
+pub mod serializer;
 
 use clap::{Parser, ValueEnum};
-use convertor::{serialize_to_compose, Convertor, Extension, Pulumi};
+use convertor::serialize_to_compose;
+use pulumi::Pulumi;
+use serializer::{Extension, Serializer};
+
 use std::{fs, path::Path};
 
 #[derive(Parser, Debug)]
@@ -56,7 +61,8 @@ fn main() -> Result<(), ()> {
 
             match args.provider {
                 Provider::Pulumi => {
-                    match Pulumi::new(args.output, &extension).deserialize_value(&file) {
+                    let a = Pulumi::new(args.output, &extension);
+                    match a.deserialize_value(&file) {
                         Ok(value) => {
                             let a = match serialize_to_compose(value) {
                                 Ok(v) => v,
