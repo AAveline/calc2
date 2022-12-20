@@ -69,20 +69,21 @@ fn main() -> Result<(), ()> {
                             fs::write("docker-compose.yml", a).expect("Should write file");
                             // println!("{:?}", a)
                         }
-                        Err(e) => todo!(),
+                        Err(_e) => todo!(),
                     };
                 }
                 Provider::Azure => todo!(),
                 Provider::Terraform => todo!(),
             }
         }
-        Err(err) => println!("Pas ok"),
+        Err(_err) => println!("Pas ok"),
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    #[warn(dead_code)]
     use super::*;
 
     #[test]
