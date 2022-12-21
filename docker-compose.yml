@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 services:
   myapp:
     depends_on:
@@ -28,11 +28,10 @@ services:
     - dapr-network
     image: daprio/dapr
     ports:
-    - 5006:5006
+    - 50006:50006
     command:
     - ./placement
     - -port
     - '50006'
 networks:
-  dapr-network:
-    driver: default
+  dapr-network: {}

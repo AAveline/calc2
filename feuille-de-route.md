@@ -22,29 +22,10 @@ cf parser précédent.
 - créer la méthode permettant de convertir les structs compose dans leur equivalent yaml pour pouvoir ecrire dans le dossier d'output les fichiers docker-compose.yaml
 
 
-## Structure
-- lib.rs
-  - pulumi
-    - yaml.rs
-    - typescript.rs
-    - convertor.rs
-  - azure
-    - bicep.rs
-    - arm.rs
-    - convertor.rs
-  - terraform
-    - hcl.rs
-    - typescript.rs
-    - convertor.rs
-  - compose
-    - yaml.rs
-    - translator.rs
-  - bin
-    - cli
-
-
-
-# TODO:
-Ignorer les champs qui sont None lors de la serialization compose
-Parser Typescript pour Pulumi
-
+## TODO
+- [ ] Parser la propriété `dapr`, vérifier si `enabled` est a true, si c'est le cas, alors en déduire les ports à mapper dans le fichier compose dans le service dapr afférent (parser le targetPort)
+- [ ] Parser la propriété `ingress` pour savoir si le service doit etre exposé via des ports publiques dans le fichier compose (parser le targetPort) 
+- [ ] Gérer correctement les erreurs
+- [ ] Mettre en place un système de warning pour les valeurs non-déductibles comme:
+  - [ ] Lorsque une référence est faite au registry pour le nom des images
+  - [ ] A incrémenter selon

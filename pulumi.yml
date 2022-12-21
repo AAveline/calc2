@@ -81,7 +81,6 @@ resources:
           appPort: 80
           enabled: true
           appId: myapp
-          #external: true
         registries:
           - server: ${registry.loginServer}
             username: ${adminUsername}
@@ -115,7 +114,7 @@ resources:
       resourceGroupName: ${resourceGroup.name}
       template:
         containers:
-          - image: node:12
+          - image: ${myImage.name}
             name: myappbis
 #outputs:
   #endpoint: https://${containerapp.configuration.ingress.fqdn}

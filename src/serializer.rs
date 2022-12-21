@@ -51,7 +51,7 @@ fn cast_struct_as_value(mut acc: Mapping, service: &ContainerAppConfiguration) -
 fn default_configuration() -> ContainerAppConfiguration {
     ContainerAppConfiguration {
         name: String::from("placement"),
-        ports: Some(vec!["5006:5006".to_string()]),
+        ports: Some(vec!["50006:50006".to_string()]),
         networks: Some(vec!["dapr-network".to_string()]),
         image: Some("daprio/dapr".to_string()),
         command: Some(vec![
@@ -78,12 +78,7 @@ fn merge_configuration_with_networks(mut configuration: Mapping, services: Mappi
         serde_yaml::to_value(services).unwrap(),
     );
 
-    let mut dapr_network = Mapping::new();
-
-    dapr_network.insert(
-        serde_yaml::to_value("driver").unwrap(),
-        serde_yaml::to_value("default").unwrap(),
-    );
+    let dapr_network = Mapping::new();
 
     let mut networks = Mapping::new();
 

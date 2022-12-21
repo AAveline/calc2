@@ -69,16 +69,6 @@ fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
 }
 
 fn check_and_match_reference(resources: &Value, reference: &str) -> Option<DockerImageForPulumi> {
-    /*
-        Le but est ici de:
-        - Recupérer la resource cible (ici myImage)
-        - De vérifier si il y a un contexte dans la resource
-            - Si oui, alors pousser une propriete contexte avec le path dans le service (path a parser)
-            - Si non, alors extraire le nom de l'image
-            - Si un provider externe est fourni dans le nom de l'image (ou une reference), alors pousser dans la resource
-                le nom avec la reference non parsée, mais emettre un warning dans le CLI disant que c'est a l'utilisateur
-                de faire en sorte que le nom match
-    */
     let val = resources.get(reference);
     let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
 
@@ -141,8 +131,9 @@ fn parse_app_configuration(
     // Handle build  context
     let image = match container.get("image") {
         Some(name) => {
-            let resource = extract_and_parse_resource_name(name.as_str().unwrap().to_string())
-                .expect("Should contains name property");
+            let resource =
+                extract_and_parse_resource_name(name.as_str().unwrap_or_default().to_string())
+                    .expect("Should contains name property");
 
             // Need to check if it's a reference or not
             let image = match check_and_match_reference(resources, &resource.name) {
@@ -165,7 +156,7 @@ fn parse_app_configuration(
     };
 
     let name = match container.get("name") {
-        Some(name) => name.as_str().unwrap().to_string(),
+        Some(name) => name.as_str().unwrap_or_default().to_string(),
         // TODO: define fallback value for name, should be yaml service name
         None => String::from(""),
     };
@@ -181,7 +172,7 @@ fn parse_app_configuration(
                 },
                 build: if image.is_context {
                     Some(BuildContext {
-                        context: image.path.unwrap(),
+                        context: image.path.unwrap_or_default(),
                     })
                 } else {
                     None
