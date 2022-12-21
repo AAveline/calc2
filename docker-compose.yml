@@ -22,8 +22,7 @@ services:
     - air
     network_mode: service:myapp
   myappbis:
-    build:
-      context: ./node-app
+    image: node:12
   placement:
     networks:
     - dapr-network

@@ -48,20 +48,27 @@ struct Resource {
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
     // TODO: Handle case where it's not a reference
-    let re = Regex::new(r"\$\{(.+)\.(.+)\}")
+
+    match Regex::new(r"\$\{(.+)\.(.+)\}")
         .expect("Should match previous regex")
         .captures(&s)
-        .expect("Should captures pattern");
-    let name = re.get(1).map_or("", |m| m.as_str()).to_string();
-    let property = re.get(2).map_or("", |m| m.as_str()).to_string();
-
-    Ok(Resource { name, property })
+    {
+        Some(v) => {
+            let name = v.get(1).map_or("", |m| m.as_str()).to_string();
+            let property = v.get(2).map_or("", |m| m.as_str()).to_string();
+            Ok(Resource { name, property })
+        }
+        None => {
+            // Return resource with provided name
+            Ok(Resource {
+                name: s,
+                property: String::from(""),
+            })
+        }
+    }
 }
 
-fn check_and_match_reference(
-    resources: &Value,
-    reference: String,
-) -> Result<DockerImageForPulumi, ()> {
+fn check_and_match_reference(resources: &Value, reference: &str) -> Option<DockerImageForPulumi> {
     /*
         Le but est ici de:
         - Recupérer la resource cible (ici myImage)
@@ -75,48 +82,54 @@ fn check_and_match_reference(
     let val = resources.get(reference);
     let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
 
-    let has_build_context = val
-        .unwrap()
-        .get("properties".to_string())
-        // Assert that properties is always defined ? TODO - Rework on it
-        .unwrap()
-        .get("build".to_string());
+    match val {
+        Some(val) => {
+            let has_build_context = val
+                .get("properties".to_string())
+                // Assert that properties is always defined ? TODO - Rework on it
+                .unwrap()
+                .get("build".to_string());
+            if has_build_context.is_some() {
+                let a = re
+                    .captures(
+                        has_build_context
+                            .unwrap()
+                            .get("context".to_string())
+                            .unwrap()
+                            .as_str()
+                            .unwrap(),
+                    )
+                    .unwrap();
 
-    if has_build_context.is_some() {
-        let a = re
-            .captures(
-                has_build_context
-                    .unwrap()
-                    .get("context".to_string())
-                    .unwrap()
-                    .as_str()
-                    .unwrap(),
-            )
-            .unwrap();
+                let image_name = a.get(3).map_or("", |m| m.as_str());
+                let context_path = a.get(1).map_or("", |m| m.as_str());
 
-        let image_name = a.get(3).map_or("", |m| m.as_str());
-        let context_path = a.get(1).map_or("", |m| m.as_str());
-        println!("{:?} {:?}", context_path, image_name);
+                if image_name.is_empty() | context_path.is_empty() {
+                    return None;
+                }
 
-        if image_name.is_empty() | context_path.is_empty() {
-            return Err(());
+                Some(DockerImageForPulumi {
+                    name: None,
+                    path: Some(format!(
+                        "{}/{}",
+                        context_path.replace("${pulumi.cwd}", "."),
+                        image_name
+                    )),
+                    is_context: true,
+                })
+            } else {
+                // No build context
+                Some(DockerImageForPulumi {
+                    name: Some("nginx".to_string()),
+                    path: None,
+                    is_context: false,
+                })
+            }
         }
-
-        Ok(DockerImageForPulumi {
-            name: None,
-            path: Some(format!(
-                "{}/{}",
-                context_path.replace("${pulumi.cwd}", "."),
-                image_name
-            )),
-            is_context: true,
-        })
-    } else {
-        Ok(DockerImageForPulumi {
-            name: Some("nginx".to_string()),
-            path: None,
-            is_context: false,
-        })
+        None => {
+            // No reference context
+            None
+        }
     }
 }
 
@@ -132,10 +145,14 @@ fn parse_app_configuration(
                 .expect("Should contains name property");
 
             // Need to check if it's a reference or not
-            let image = check_and_match_reference(resources, resource.name)
-                .expect("Should contains the parsed resource");
-
-            println!("{:?}", image);
+            let image = match check_and_match_reference(resources, &resource.name) {
+                Some(v) => v,
+                None => DockerImageForPulumi {
+                    name: Some(resource.name),
+                    is_context: false,
+                    path: None,
+                },
+            };
 
             image
         }
