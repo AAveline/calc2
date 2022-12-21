@@ -11,6 +11,10 @@ pub enum Extension {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildContext {
+    pub context: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContainerAppConfiguration {
     #[serde(skip_serializing)]
     pub name: String,
@@ -18,7 +22,8 @@ pub struct ContainerAppConfiguration {
     pub depends_on: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub networks: Option<Vec<String>>,
-    pub image: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,6 +32,8 @@ pub struct ContainerAppConfiguration {
     pub command: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build: Option<BuildContext>,
 }
 pub trait Serializer {
     fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()>;
@@ -46,7 +53,7 @@ fn default_configuration() -> ContainerAppConfiguration {
         name: String::from("placement"),
         ports: Some(vec!["5006:5006".to_string()]),
         networks: Some(vec!["dapr-network".to_string()]),
-        image: "daprio/dapr".to_string(),
+        image: Some("daprio/dapr".to_string()),
         command: Some(vec![
             "./placement".to_string(),
             "-port".to_string(),
@@ -55,6 +62,7 @@ fn default_configuration() -> ContainerAppConfiguration {
         depends_on: None,
         environment: None,
         network_mode: None,
+        build: None,
     }
 }
 

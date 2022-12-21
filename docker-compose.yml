@@ -5,7 +5,8 @@ services:
     - placement
     networks:
     - dapr-network
-    image: ${myImage.name}
+    build:
+      context: ./node-app
   myapp_dapr:
     depends_on:
     - myapp
@@ -21,7 +22,8 @@ services:
     - air
     network_mode: service:myapp
   myappbis:
-    image: ${myImage.name}
+    build:
+      context: ./node-app
   placement:
     networks:
     - dapr-network

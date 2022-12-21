@@ -1,15 +1,19 @@
-use std::borrow::Borrow;
-
 use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
 
-use crate::serializer::{ContainerAppConfiguration, Extension, Serializer};
+use crate::serializer::{BuildContext, ContainerAppConfiguration, Extension, Serializer};
 
 pub struct Pulumi<'a> {
-    #[warn(dead_code)]
     output: String,
     language: &'a Extension,
+}
+
+#[derive(Debug)]
+pub struct DockerImageForPulumi {
+    name: Option<String>,
+    path: Option<String>,
+    is_context: bool,
 }
 
 impl Pulumi<'_> {
@@ -36,85 +40,111 @@ impl Serializer for Pulumi<'_> {
         Ok(())
     }
 }
+#[derive(Debug)]
+struct Resource {
+    name: String,
+    property: String,
+}
+
+fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
+    // TODO: Handle case where it's not a reference
+    let re = Regex::new(r"\$\{(.+)\.(.+)\}")
+        .expect("Should match previous regex")
+        .captures(&s)
+        .expect("Should captures pattern");
+    let name = re.get(1).map_or("", |m| m.as_str()).to_string();
+    let property = re.get(2).map_or("", |m| m.as_str()).to_string();
+
+    Ok(Resource { name, property })
+}
 
 fn check_and_match_reference(
     resources: &Value,
     reference: String,
-    properties: Vec<String>,
-) -> Option<bool> {
-    let mut val = resources.get(reference);
+) -> Result<DockerImageForPulumi, ()> {
+    /*
+        Le but est ici de:
+        - Recupérer la resource cible (ici myImage)
+        - De vérifier si il y a un contexte dans la resource
+            - Si oui, alors pousser une propriete contexte avec le path dans le service (path a parser)
+            - Si non, alors extraire le nom de l'image
+            - Si un provider externe est fourni dans le nom de l'image (ou une reference), alors pousser dans la resource
+                le nom avec la reference non parsée, mais emettre un warning dans le CLI disant que c'est a l'utilisateur
+                de faire en sorte que le nom match
+    */
+    let val = resources.get(reference);
+    let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
 
-    let a = match val {
-        Some(_v) => {
-            let re = Regex::new(r"(?P<resource>\$\{(.+).loginServer\})(/)(.+)").unwrap();
+    let has_build_context = val
+        .unwrap()
+        .get("properties".to_string())
+        // Assert that properties is always defined ? TODO - Rework on it
+        .unwrap()
+        .get("build".to_string());
 
-            for property in properties {
-                val = match val?.get(&property) {
-                    Some(_v) => val?.get(&property).to_owned(),
-                    None => None,
-                };
-            }
+    if has_build_context.is_some() {
+        let a = re
+            .captures(
+                has_build_context
+                    .unwrap()
+                    .get("context".to_string())
+                    .unwrap()
+                    .as_str()
+                    .unwrap(),
+            )
+            .unwrap();
 
-            /*
-                Need the ability to parse the given resource and potentially extract the targeted property
-                OR extract the nested resource with a targeted property
-                Need to define the potency of this function :
-                    - Where to put the recursive ability, based on what attribute
-                    - How to fallback
+        let image_name = a.get(3).map_or("", |m| m.as_str());
+        let context_path = a.get(1).map_or("", |m| m.as_str());
+        println!("{:?} {:?}", context_path, image_name);
 
-                Maybe the potency is simply to parse the name of the image without a nested recursive link ?
-                - Eg: ${registry.loginServer}/node-app:v1.0.0 => node-app:v1.0.0
-                Maybe we need to cast the resource in a struct and act on it ?
-                    - If it's a docker image, do something
-                    - If it's anything else, do something else
-                But maybe it's not required because we only need the image for the docker compose ?
-            */
-            match val {
-                Some(val) => {
-                    let val = val.as_str().unwrap();
-                    let a = re.captures(val).unwrap();
-                    println!("{:?}", val);
-
-                    let nested_ref = a.get(2).map_or("", |m| m.as_str());
-                    println!("{:?}", nested_ref);
-                    if nested_ref.is_empty() {
-                        println!("empty");
-                        println!("{:?}", val)
-                    } else {
-                        // Do something with recursive call
-                        let b = check_and_match_reference(
-                            resources,
-                            nested_ref.to_string(),
-                            vec![nested_ref.to_string(), "properties".to_string()],
-                        );
-                        println!("{:?}", b);
-                    }
-                }
-                None => (),
-            }
-
-            Some(true)
+        if image_name.is_empty() | context_path.is_empty() {
+            return Err(());
         }
-        None => None,
-    };
 
-    a
+        Ok(DockerImageForPulumi {
+            name: None,
+            path: Some(format!(
+                "{}/{}",
+                context_path.replace("${pulumi.cwd}", "."),
+                image_name
+            )),
+            is_context: true,
+        })
+    } else {
+        Ok(DockerImageForPulumi {
+            name: Some("nginx".to_string()),
+            path: None,
+            is_context: false,
+        })
+    }
 }
 
 fn parse_app_configuration(
+    resources: &Value,
     container: &Value,
     dapr_configuration: Option<&Value>,
 ) -> Vec<ContainerAppConfiguration> {
     // Handle build  context
     let image = match container.get("image") {
         Some(name) => {
-            // Need to check if it's a reference or not
+            let resource = extract_and_parse_resource_name(name.as_str().unwrap().to_string())
+                .expect("Should contains name property");
 
-            // Not a reference
-            name.as_str().unwrap().to_string()
+            // Need to check if it's a reference or not
+            let image = check_and_match_reference(resources, resource.name)
+                .expect("Should contains the parsed resource");
+
+            println!("{:?}", image);
+
+            image
         }
         // Fallback image name: Empty String
-        None => String::from(""),
+        None => DockerImageForPulumi {
+            name: None,
+            path: None,
+            is_context: false,
+        },
     };
 
     let name = match container.get("name") {
@@ -128,7 +158,17 @@ fn parse_app_configuration(
         vec![
             ContainerAppConfiguration {
                 // Get container image
-                image: String::from(&image),
+                image: match image.name {
+                    Some(v) => Some(v),
+                    None => None,
+                },
+                build: if image.is_context {
+                    Some(BuildContext {
+                        context: image.path.unwrap(),
+                    })
+                } else {
+                    None
+                },
                 // Get container name
                 name: String::from(&name),
                 depends_on: Some(vec!["placement".to_string()]),
@@ -141,7 +181,7 @@ fn parse_app_configuration(
             },
             // Dapr Sidecar config
             ContainerAppConfiguration {
-                image: String::from("daprio/daprd:edge"),
+                image: Some(String::from("daprio/daprd:edge")),
                 // Get container name
                 name: format!("{}_dapr", String::from(&name)),
                 depends_on: Some(vec![String::from(&name)]),
@@ -150,6 +190,7 @@ fn parse_app_configuration(
                 environment: None,
                 ports: None,
                 networks: None,
+                build: None,
                 command: Some(vec![
                     "./daprd".to_string(),
                     "-app-id".to_string(),
@@ -165,7 +206,17 @@ fn parse_app_configuration(
     } else {
         vec![ContainerAppConfiguration {
             // Get container image
-            image,
+            image: match image.name {
+                Some(v) => Some(v),
+                None => None,
+            },
+            build: if image.is_context {
+                Some(BuildContext {
+                    context: image.path.unwrap(),
+                })
+            } else {
+                None
+            },
             // Get container name
             name,
             depends_on: None,
@@ -203,16 +254,6 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                 .values()
                 .filter(|x| filter_by_type(x, "azure-native:app:ContainerApp"));
 
-            let images = as_mapping
-                .values()
-                .filter(|x| filter_by_type(x, "docker:RegistryImage"));
-
-            check_and_match_reference(
-                resources,
-                "myImage".to_string(),
-                vec!["properties".to_string(), "name".to_string()],
-            );
-
             let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
             for app in container_apps {
@@ -226,7 +267,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 
                 let mut a: Vec<ContainerAppConfiguration> = containers
                     .iter()
-                    .flat_map(|val| parse_app_configuration(val, dapr_configuration))
+                    .flat_map(|val| parse_app_configuration(resources, val, dapr_configuration))
                     .collect();
 
                 services.append(&mut a);

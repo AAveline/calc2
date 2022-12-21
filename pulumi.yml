@@ -115,7 +115,7 @@ resources:
       resourceGroupName: ${resourceGroup.name}
       template:
         containers:
-          - image: ${myImage.name}
+          - image: node:12
             name: myappbis
 #outputs:
   #endpoint: https://${containerapp.configuration.ingress.fqdn}
