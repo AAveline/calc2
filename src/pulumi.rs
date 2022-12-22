@@ -128,12 +128,20 @@ fn check_and_match_reference(resources: &Value, reference: &str) -> Option<Docke
         }
     }
 }
+struct AppConfiguration<'a> {
+    container: &'a Value,
+    dapr_configuration: Option<&'a Value>,
+    ingress_configuration: Option<&'a Value>,
+}
 
 fn parse_app_configuration(
     resources: &Value,
-    container: &Value,
-    dapr_configuration: Option<&Value>,
+    configuration: AppConfiguration,
 ) -> Vec<ContainerAppConfiguration> {
+    let container = configuration.container;
+    let dapr_configuration = configuration.dapr_configuration;
+    let ingress_configuration = configuration.ingress_configuration;
+
     // Handle build  context
     let image = match container.get("image") {
         Some(name) => {
@@ -167,7 +175,37 @@ fn parse_app_configuration(
         None => String::from(""),
     };
 
+    // Get ingress
+    //TODO
+
     if dapr_configuration.is_some() {
+        // Check if dapr is enabled
+        let app_port = dapr_configuration
+            .unwrap()
+            .get("enabled".to_string())
+            .unwrap();
+        let port = dapr_configuration.unwrap().get("appPort").unwrap();
+        let ingress_port = ingress_configuration
+            .unwrap()
+            .get("external")
+            .and(ingress_configuration.unwrap().get("targetPort"));
+        let mut ports: Vec<String> = vec![];
+
+        if app_port.as_bool() == Some(true) {
+            // Get ports in dapr config
+            println!("{:?}", port);
+            // Assert for now than source and target ports are same
+            ports.push(format!(
+                "{}:{}",
+                if ingress_port.is_some() {
+                    ingress_port.unwrap().as_f64().unwrap().to_string()
+                } else {
+                    port.as_f64().unwrap().to_string()
+                },
+                port.as_f64().unwrap().to_string()
+            ))
+        }
+
         // Push DaprContainerAppConfig too
         vec![
             ContainerAppConfiguration {
@@ -190,7 +228,7 @@ fn parse_app_configuration(
                 network_mode: None,
                 // TODO
                 environment: None,
-                ports: None,
+                ports: if ports.len() > 0 { Some(ports) } else { None },
                 command: None,
             },
             // Dapr Sidecar config
@@ -210,7 +248,7 @@ fn parse_app_configuration(
                     "-app-id".to_string(),
                     String::from(&name),
                     "-app-port".to_string(),
-                    String::from("port"),
+                    format!("{}", port.as_f64().unwrap().to_string()),
                     "-placement-host-address".to_string(),
                     "placement:50006".to_string(),
                     "air".to_string(),
@@ -278,10 +316,21 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                     .as_sequence()?;
 
                 let dapr_configuration = app.get("properties")?.get("configuration")?.get("dapr");
+                let ingress_configuration =
+                    app.get("properties")?.get("configuration")?.get("ingress");
 
                 let mut a: Vec<ContainerAppConfiguration> = containers
                     .iter()
-                    .flat_map(|val| parse_app_configuration(resources, val, dapr_configuration))
+                    .flat_map(|container| {
+                        parse_app_configuration(
+                            resources,
+                            AppConfiguration {
+                                container,
+                                dapr_configuration,
+                                ingress_configuration,
+                            },
+                        )
+                    })
                     .collect();
 
                 services.append(&mut a);

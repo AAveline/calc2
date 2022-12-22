@@ -78,7 +78,7 @@ resources:
           external: true
           targetPort: 80
         dapr:
-          appPort: 80
+          appPort: 8000
           enabled: true
           appId: myapp
         registries:

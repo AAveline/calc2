@@ -11,11 +11,7 @@ input::bicep => struct bicep => parse struct => struct compose => output::compos
 
 ## how
 cf parser précédent. 
-- créer le CLI en utilisant le crate suivant https://docs.rs/clap/latest/clap/ acceptant les inputs suivants:
-  - le type de convertisseur a utiliser (pulumi/azure/tf)
-  - le langage selectionné si necessaire (pulumi => typescript, python etc...)
-  - le format d'output
-  - le dossier d'output
+- créer le CLI en utilisant le crate suivant https://docs.rs/clap/latest/clap/ 
 - extraire l'api Pulumi de container apps => https://www.pulumi.com/registry/packages/azure-native/api-docs/app/containerapp/ => créer les structs equivalents 
 - extraire l'api Bicep de container apps => https://learn.microsoft.com/en-us/azure/templates/microsoft.app/containerapps?pivots=deployment-language-bicep => créer les struct equivalents
 - créer le parser capable de translate les structs pulumi/bicep vers les structs compose

@@ -5,6 +5,8 @@ services:
     - placement
     networks:
     - dapr-network
+    ports:
+    - 80:8000
     build:
       context: ./node-app
   myapp_dapr:
@@ -16,7 +18,7 @@ services:
     - -app-id
     - myapp
     - -app-port
-    - port
+    - '8000'
     - -placement-host-address
     - placement:50006
     - air
