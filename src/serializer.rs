@@ -107,17 +107,3 @@ fn merge_configuration_with_networks(mut configuration: Mapping, services: Mappi
 
     configuration
 }
-
-pub fn serialize_to_compose(services: &Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
-    let as_value = vec![services.clone(), vec![default_configuration()]]
-        .concat()
-        .iter()
-        .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x));
-
-    let configuration = merge_configuration_with_networks(Mapping::new(), as_value);
-
-    Ok(serde_yaml::to_string(&configuration)
-        .unwrap()
-        .as_bytes()
-        .to_vec())
-}
