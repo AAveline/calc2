@@ -3,10 +3,11 @@ pub mod serializer;
 
 use clap::{Parser, ValueEnum};
 use pulumi::Pulumi;
-use serializer::{serialize_to_compose, Language, Serializer};
+use serializer::{Language, Serializer};
 
 use std::{fs, path::Path};
 
+const FILENAME: &str = "docker-compose.yml";
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -66,7 +67,8 @@ fn main() -> Result<(), ()> {
                         .expect("Deserialiazed value is defined");
 
                     match value.serialize_value(&value.resources.as_ref().unwrap()) {
-                        Ok(v) => fs::write("docker-compose.yml", v).expect("Should write file"),
+                        Ok(v) => fs::write(FILENAME, v)
+                            .expect("Should output serialized value in compose file"),
                         Err(_) => todo!(),
                     }
                 }
