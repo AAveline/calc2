@@ -2,11 +2,11 @@ use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
 
-use crate::serializer::{BuildContext, ContainerAppConfiguration, Extension, Serializer};
+use crate::serializer::{BuildContext, ContainerAppConfiguration, Language, Serializer};
 
-pub struct Pulumi<'a> {
-    output: String,
-    language: &'a Extension,
+pub struct Pulumi {
+    language: Language,
+    pub resources: Option<Vec<ContainerAppConfiguration>>,
 }
 
 #[derive(Debug)]
@@ -16,28 +16,34 @@ pub struct DockerImageForPulumi {
     is_context: bool,
 }
 
-impl Pulumi<'_> {
-    pub fn new(output: String, language: &Extension) -> Pulumi {
+impl Pulumi {
+    pub fn new(language: Language) -> Option<Pulumi> {
         // Test if the language is supported for the provider
-        Pulumi { output, language }
+        match language {
+            Language::Yaml | Language::Typescript => Some(Pulumi {
+                language,
+                resources: None,
+            }),
+            _ => None,
+        }
     }
 }
 
-impl Serializer for Pulumi<'_> {
-    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()> {
+impl Serializer for Pulumi {
+    type Output = Pulumi;
+    fn deserialize_value(&mut self, input: &str) -> Option<&Self> {
         match self.language {
-            Extension::Yaml => match deserialize_yaml(input) {
-                Some(value) => Ok(value),
-                None => Err(()),
+            Language::Yaml => match deserialize_yaml(input) {
+                Some(value) => {
+                    self.resources = Some(value);
+                    Some(self)
+                }
+                None => None,
             },
-            Extension::Typescript => todo!(),
+            Language::Typescript => todo!(),
             // Return an error with context
-            _ => Err(()),
+            _ => None,
         }
-    }
-
-    fn serialize_value(&self) -> Result<(), ()> {
-        Ok(())
     }
 }
 #[derive(Debug)]

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Extension {
+pub enum Language {
     Yaml,
     Typescript,
     Json,
@@ -36,8 +36,21 @@ pub struct ContainerAppConfiguration {
     pub build: Option<BuildContext>,
 }
 pub trait Serializer {
-    fn deserialize_value(&self, input: &str) -> Result<Vec<ContainerAppConfiguration>, ()>;
-    fn serialize_value(&self) -> Result<(), ()>;
+    type Output;
+    fn deserialize_value(&mut self, input: &str) -> Option<&Self::Output>;
+    fn serialize_value(&self, services: &Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
+        let as_value = vec![services.clone(), vec![default_configuration()]]
+            .concat()
+            .iter()
+            .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x));
+
+        let configuration = merge_configuration_with_networks(Mapping::new(), as_value);
+
+        Ok(serde_yaml::to_string(&configuration)
+            .unwrap()
+            .as_bytes()
+            .to_vec())
+    }
 }
 
 fn cast_struct_as_value(mut acc: Mapping, service: &ContainerAppConfiguration) -> Mapping {
@@ -95,8 +108,8 @@ fn merge_configuration_with_networks(mut configuration: Mapping, services: Mappi
     configuration
 }
 
-pub fn serialize_to_compose(services: Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
-    let as_value = vec![services, vec![default_configuration()]]
+pub fn serialize_to_compose(services: &Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
+    let as_value = vec![services.clone(), vec![default_configuration()]]
         .concat()
         .iter()
         .fold(Mapping::new(), |acc, x| cast_struct_as_value(acc, &x));

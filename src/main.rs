@@ -3,7 +3,7 @@ pub mod serializer;
 
 use clap::{Parser, ValueEnum};
 use pulumi::Pulumi;
-use serializer::{serialize_to_compose, Extension, Serializer};
+use serializer::{serialize_to_compose, Language, Serializer};
 
 use std::{fs, path::Path};
 
@@ -33,15 +33,15 @@ enum Provider {
     Terraform,
 }
 
-fn parse_extension(filename: &str) -> Result<Extension, Extension> {
-    let extension = Path::new(filename).extension().and_then(|val| val.to_str());
+fn parse_language(filename: &str) -> Result<Language, Language> {
+    let language = Path::new(filename).extension().and_then(|val| val.to_str());
 
-    match extension {
-        Some("yml" | "yaml") => Ok(Extension::Yaml),
-        Some("ts") => Ok(Extension::Typescript),
-        Some("bicep") => Ok(Extension::Bicep),
-        Some("json") => Ok(Extension::Json),
-        _ => Err(Extension::NotSupported),
+    match language {
+        Some("yml" | "yaml") => Ok(Language::Yaml),
+        Some("ts") => Ok(Language::Typescript),
+        Some("bicep") => Ok(Language::Bicep),
+        Some("json") => Ok(Language::Json),
+        _ => Err(Language::NotSupported),
     }
 }
 
@@ -52,31 +52,29 @@ fn main() -> Result<(), ()> {
 
     match file {
         Ok(file) => {
-            let extension = match parse_extension(&args.input) {
+            let language = match parse_language(&args.input) {
                 Ok(r) => r,
                 Err(e) => e,
             };
 
             match args.provider {
                 Provider::Pulumi => {
-                    let a = Pulumi::new(args.output, &extension);
-                    match a.deserialize_value(&file) {
-                        Ok(value) => {
-                            let a = match serialize_to_compose(value) {
-                                Ok(v) => v,
-                                Err(v) => vec![],
-                            };
-                            fs::write("docker-compose.yml", a).expect("Should write file");
-                            // println!("{:?}", a)
-                        }
-                        Err(_e) => todo!(),
-                    };
+                    let mut provider = Pulumi::new(language).expect("Language is not supported");
+
+                    let value = provider
+                        .deserialize_value(&file)
+                        .expect("Deserialiazed value is defined");
+
+                    match value.serialize_value(&value.resources.as_ref().unwrap()) {
+                        Ok(v) => fs::write("docker-compose.yml", v).expect("Should write file"),
+                        Err(_) => todo!(),
+                    }
                 }
                 Provider::Azure => todo!(),
                 Provider::Terraform => todo!(),
             }
         }
-        Err(_err) => println!("Pas ok"),
+        Err(e) => println!("{}", e),
     }
     Ok(())
 }
