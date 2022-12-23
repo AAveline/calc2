@@ -18,10 +18,9 @@ struct Args {
     /// input file to convert
     #[arg(short, long)]
     input: String,
-
-    /// Output folder
-    #[arg(short, long)]
-    output: String,
+    // Output folder
+    //#[arg(short, long)]
+    //output: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]

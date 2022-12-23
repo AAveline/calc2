@@ -241,8 +241,8 @@ fn parse_app_configuration(
         vec![
             ContainerAppConfiguration {
                 image: image.name,
-                build: image.is_context.then_some(BuildContext {
-                    context: image.path.unwrap_or_default(),
+                build: image.is_context.then(|| BuildContext {
+                    context: image.path.unwrap(),
                 }),
                 name: String::from(&name),
                 depends_on: Some(vec!["placement".to_string()]),
@@ -278,7 +278,7 @@ fn parse_app_configuration(
     } else {
         vec![ContainerAppConfiguration {
             image: image.name,
-            build: image.is_context.then_some(BuildContext {
+            build: image.is_context.then(|| BuildContext {
                 context: image.path.unwrap(),
             }),
             name,
