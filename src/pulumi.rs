@@ -240,12 +240,8 @@ fn parse_app_configuration(
     if dapr_configuration.is_some() {
         vec![
             ContainerAppConfiguration {
-                // Get container image
-                image: match image.name {
-                    Some(v) => Some(v),
-                    None => None,
-                },
-                build: image.is_context.then(|| BuildContext {
+                image: image.name,
+                build: image.is_context.then_some(BuildContext {
                     context: image.path.unwrap_or_default(),
                 }),
                 name: String::from(&name),
@@ -281,11 +277,8 @@ fn parse_app_configuration(
         ]
     } else {
         vec![ContainerAppConfiguration {
-            image: match image.name {
-                Some(v) => Some(v),
-                None => None,
-            },
-            build: image.is_context.then(|| BuildContext {
+            image: image.name,
+            build: image.is_context.then_some(BuildContext {
                 context: image.path.unwrap(),
             }),
             name,
