@@ -175,21 +175,33 @@ fn parse_app_configuration(
         None => String::from(""),
     };
 
-    // Get ingress
-    //TODO
-
     if dapr_configuration.is_some() {
         // Check if dapr is enabled
         let app_port = dapr_configuration
-            .unwrap()
+            .unwrap_or(&Value::Null)
             .get("enabled".to_string())
-            .unwrap();
-        let port = dapr_configuration.unwrap().get("appPort").unwrap();
+            .unwrap_or(&Value::Null);
+
+        let port = dapr_configuration
+            .unwrap_or(&Value::Null)
+            .get("appPort")
+            .unwrap_or(&Value::Null);
+
         let ingress_port = ingress_configuration
-            .unwrap()
+            .unwrap_or(&Value::Null)
             .get("external")
-            .and(ingress_configuration.unwrap().get("targetPort"));
+            .and(
+                ingress_configuration
+                    .unwrap_or(&Value::Null)
+                    .get("targetPort"),
+            );
         let mut ports: Vec<String> = vec![];
+
+        /*
+            TODO:
+            If dapr is not enabled and ingress is enabled, should expose port
+
+        */
 
         if app_port.as_bool() == Some(true) {
             // Get ports in dapr config
@@ -198,11 +210,15 @@ fn parse_app_configuration(
             ports.push(format!(
                 "{}:{}",
                 if ingress_port.is_some() {
-                    ingress_port.unwrap().as_f64().unwrap().to_string()
+                    ingress_port
+                        .unwrap_or(&Value::Null)
+                        .as_f64()
+                        .unwrap_or_default()
+                        .to_string()
                 } else {
-                    port.as_f64().unwrap().to_string()
+                    port.as_f64().unwrap_or_default().to_string()
                 },
-                port.as_f64().unwrap().to_string()
+                port.as_f64().unwrap_or_default().to_string()
             ))
         }
 
@@ -248,7 +264,7 @@ fn parse_app_configuration(
                     "-app-id".to_string(),
                     String::from(&name),
                     "-app-port".to_string(),
-                    format!("{}", port.as_f64().unwrap().to_string()),
+                    format!("{}", port.as_f64().unwrap_or_default().to_string()),
                     "-placement-host-address".to_string(),
                     "placement:50006".to_string(),
                     "air".to_string(),
