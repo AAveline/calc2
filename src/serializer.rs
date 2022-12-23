@@ -1,3 +1,5 @@
+use std::fmt::Error;
+
 use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
 
@@ -38,7 +40,10 @@ pub struct ContainerAppConfiguration {
 pub trait Serializer {
     type Output;
     fn deserialize_value(&mut self, input: &str) -> Option<&Self::Output>;
-    fn serialize_value(&self, services: &Vec<ContainerAppConfiguration>) -> Result<Vec<u8>, ()> {
+    fn serialize_value(
+        &self,
+        services: &Vec<ContainerAppConfiguration>,
+    ) -> Result<Vec<u8>, serde_yaml::Error> {
         let as_value = vec![services.clone(), vec![default_configuration()]]
             .concat()
             .iter()
@@ -46,10 +51,10 @@ pub trait Serializer {
 
         let configuration = merge_configuration_with_networks(Mapping::new(), as_value);
 
-        Ok(serde_yaml::to_string(&configuration)
-            .unwrap()
-            .as_bytes()
-            .to_vec())
+        match serde_yaml::to_string(&configuration) {
+            Ok(v) => Ok(v.as_bytes().to_vec()),
+            Err(e) => Err(e),
+        }
     }
 }
 

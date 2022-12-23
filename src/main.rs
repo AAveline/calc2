@@ -1,5 +1,6 @@
 pub mod pulumi;
 pub mod serializer;
+pub mod utils;
 
 use clap::{Parser, ValueEnum};
 use pulumi::Pulumi;
@@ -45,7 +46,7 @@ fn parse_language(filename: &str) -> Result<Language, Language> {
     }
 }
 
-fn main() -> Result<(), ()> {
+fn main() {
     let args = Args::parse();
 
     let file = fs::read_to_string(&args.input);
@@ -67,12 +68,18 @@ fn main() -> Result<(), ()> {
 
                     match value.serialize_value(&value.resources.as_ref().unwrap()) {
                         Ok(v) => {
-                            // TODO: Check if docker-compose file exists, if true, then copy old content in docker-compose.old.yml
+                            if Path::new(FILENAME).exists() {
+                                let old_file = fs::read_to_string(Path::new(FILENAME));
 
-                            fs::write(FILENAME, v)
+                                match fs::write("docker-compose.old.yml", old_file.unwrap()) {
+                                    Ok(_r) => utils::write("Old file saved".to_string()),
+                                    Err(e) => utils::write_err(e.to_string()),
+                                };
+                            }
+
+                            fs::write(FILENAME, v).unwrap();
                         }
-                        .expect("Should output serialized value in compose file"),
-                        Err(_) => todo!(),
+                        Err(e) => utils::write_err(e.to_string()).unwrap(),
                     }
                 }
                 Provider::Azure => todo!(),
@@ -81,7 +88,6 @@ fn main() -> Result<(), ()> {
         }
         Err(e) => println!("{}", e),
     }
-    Ok(())
 }
 
 #[cfg(test)]
