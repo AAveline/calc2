@@ -110,9 +110,8 @@ fn check_and_match_reference(resources: &Value, reference: &str) -> Option<Docke
                     is_context: true,
                 })
             } else {
-                // TODO: Need to output right image
                 Some(DockerImageForPulumi {
-                    name: Some("nginx".to_string()),
+                    name: Some(reference.to_string()),
                     path: None,
                     is_context: false,
                 })
@@ -146,7 +145,6 @@ fn build_image_for_serialization(resources: &Value, container: &Value) -> Docker
 
             image
         }
-        // Fallback image name: Empty String
         None => DockerImageForPulumi {
             name: None,
             path: None,
@@ -167,24 +165,21 @@ fn build_name_for_serialization(container: &Value) -> String {
     name
 }
 
-struct PortsBuilder<'a> {
-    ingress_app_port: Option<&'a Value>,
-    ports: Option<Vec<String>>,
-}
-
-fn build_ports_mapping(configuration: AppConfiguration) -> (&Value, Option<Vec<String>>) {
-    /*
-        TODO:
-        If dapr is not enabled and ingress is enabled, should expose port
-
-    */
-
+fn build_ports_mapping_for_serialization(
+    configuration: AppConfiguration,
+) -> (&Value, Option<Vec<String>>) {
     let dapr_configuration = configuration.dapr_configuration;
     let ingress_configuration = configuration.ingress_configuration;
+    let container_name = configuration.container.get("name");
 
     let has_dapr_enabled = dapr_configuration
         .unwrap_or(&Value::Null)
         .get("enabled".to_string())
+        .unwrap_or(&Value::Null);
+
+    let has_ingress_exposed = ingress_configuration
+        .unwrap_or(&Value::Null)
+        .get("external".to_string())
         .unwrap_or(&Value::Null);
 
     let dapr_app_port = dapr_configuration
@@ -194,29 +189,34 @@ fn build_ports_mapping(configuration: AppConfiguration) -> (&Value, Option<Vec<S
 
     let ingress_app_port = ingress_configuration
         .unwrap_or(&Value::Null)
-        .get("external")
-        .and(
-            ingress_configuration
-                .unwrap_or(&Value::Null)
-                .get("targetPort"),
-        );
+        .get("targetPort")
+        .unwrap_or(&Value::Null);
 
     let mut ports: Vec<String> = vec![];
+    // TODO: Assert for now than source and target ports are sames (container name and dapr target)
 
-    if has_dapr_enabled.as_bool() == Some(true) {
-        // Assert for now than source and target ports are same
+    if has_dapr_enabled.as_bool() == Some(true) && has_ingress_exposed.as_bool() == Some(true) {
+        let has_right_target = container_name
+            == dapr_configuration
+                .unwrap_or(&Value::Null)
+                .get("appId".to_string());
+
+        if has_right_target {
+            ports.push(format!(
+                "{}:{}",
+                ingress_app_port.as_f64().unwrap_or_default().to_string(),
+                dapr_app_port.as_f64().unwrap_or_default().to_string()
+            ))
+        }
+    }
+
+    if (has_dapr_enabled.as_bool() == Some(false) || has_dapr_enabled.is_null())
+        && has_ingress_exposed.as_bool() == Some(true)
+    {
         ports.push(format!(
             "{}:{}",
-            if ingress_app_port.is_some() {
-                ingress_app_port
-                    .unwrap_or(&Value::Null)
-                    .as_f64()
-                    .unwrap_or_default()
-                    .to_string()
-            } else {
-                dapr_app_port.as_f64().unwrap_or_default().to_string()
-            },
-            dapr_app_port.as_f64().unwrap_or_default().to_string()
+            ingress_app_port.as_f64().unwrap_or_default().to_string(),
+            ingress_app_port.as_f64().unwrap_or_default().to_string()
         ))
     }
 
@@ -235,11 +235,9 @@ fn parse_app_configuration(
 
     let image = build_image_for_serialization(resources, container);
     let name = build_name_for_serialization(container);
+    let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
 
     if dapr_configuration.is_some() {
-        let (dapr_app_port, ports) = build_ports_mapping(configuration);
-
-        // Push DaprContainerAppConfig too
         vec![
             ContainerAppConfiguration {
                 // Get container image
@@ -247,19 +245,13 @@ fn parse_app_configuration(
                     Some(v) => Some(v),
                     None => None,
                 },
-                build: if image.is_context {
-                    Some(BuildContext {
-                        context: image.path.unwrap_or_default(),
-                    })
-                } else {
-                    None
-                },
-                // Get container name
+                build: image.is_context.then(|| BuildContext {
+                    context: image.path.unwrap_or_default(),
+                }),
                 name: String::from(&name),
                 depends_on: Some(vec!["placement".to_string()]),
                 networks: Some(vec![String::from("dapr-network")]),
                 network_mode: None,
-                // TODO
                 environment: None,
                 ports: ports.clone(),
                 command: None,
@@ -267,13 +259,12 @@ fn parse_app_configuration(
             // Dapr Sidecar config
             ContainerAppConfiguration {
                 image: Some(String::from("daprio/daprd:edge")),
-                // Get container name
                 name: format!("{}_dapr", String::from(&name)),
                 depends_on: Some(vec![String::from(&name)]),
                 network_mode: Some(format!("service:{}", String::from(&name))),
-                // TODO
                 environment: None,
-                ports: ports.clone(),
+                // No exposed ports for dapr sidecar
+                ports: None,
                 networks: None,
                 build: None,
                 command: Some(vec![
@@ -290,19 +281,13 @@ fn parse_app_configuration(
         ]
     } else {
         vec![ContainerAppConfiguration {
-            // Get container image
             image: match image.name {
                 Some(v) => Some(v),
                 None => None,
             },
-            build: if image.is_context {
-                Some(BuildContext {
-                    context: image.path.unwrap(),
-                })
-            } else {
-                None
-            },
-            // Get container name
+            build: image.is_context.then(|| BuildContext {
+                context: image.path.unwrap(),
+            }),
             name,
             depends_on: None,
             // No Dapr network
@@ -310,7 +295,7 @@ fn parse_app_configuration(
             environment: None,
             network_mode: None,
             // TODO: Can have port if ingress defined
-            ports: None,
+            ports: ports.clone(),
             command: None,
         }]
     }

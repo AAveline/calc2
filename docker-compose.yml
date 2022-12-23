@@ -25,11 +25,15 @@ services:
     network_mode: service:myapp
   myappbis:
     image: node:12
+    ports:
+    - 80:80
   some-app:
     depends_on:
     - placement
     networks:
     - dapr-network
+    ports:
+    - 3000:3000
     build:
       context: ./node-app
   some-app_dapr:

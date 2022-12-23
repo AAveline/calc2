@@ -67,6 +67,7 @@ fn main() -> Result<(), ()> {
                         .expect("Deserialiazed value is defined");
 
                     match value.serialize_value(&value.resources.as_ref().unwrap()) {
+                        // TODO: Check if docker-compose file exists, if true, then copy old content in docker-compose.old.yml
                         Ok(v) => fs::write(FILENAME, v)
                             .expect("Should output serialized value in compose file"),
                         Err(_) => todo!(),
