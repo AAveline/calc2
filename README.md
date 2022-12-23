@@ -1,4 +1,4 @@
-# Calc2 (temporary name)
+# CappS (ContainerApps Serializer)
 
 ## What is it ?
 This should be an unified `Azure ContainerApps` serializer from multi providers such as `Pulumi`, `Azure ARM` and `Terraform` to `Docker compose`. The goal is to serialize IAC Cloud configuration to a local compose emulation.
