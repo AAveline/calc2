@@ -18,7 +18,6 @@ pub struct DockerImageForPulumi {
 
 impl Pulumi {
     pub fn new(language: Language) -> Option<Pulumi> {
-        // Test if the language is supported for the provider
         match language {
             Language::Yaml | Language::Typescript => Some(Pulumi {
                 language,
@@ -41,7 +40,7 @@ impl Serializer for Pulumi {
                 None => None,
             },
             Language::Typescript => todo!(),
-            // Return an error with context
+            // TODO: Return an error with context
             _ => None,
         }
     }
@@ -49,7 +48,7 @@ impl Serializer for Pulumi {
 #[derive(Debug)]
 struct Resource {
     name: String,
-    property: String,
+    property: Option<String>,
 }
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
@@ -61,16 +60,13 @@ fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
     {
         Some(v) => {
             let name = v.get(1).map_or("", |m| m.as_str()).to_string();
-            let property = v.get(2).map_or("", |m| m.as_str()).to_string();
+            let property = Some(v.get(2).map_or("", |m| m.as_str()).to_string());
             Ok(Resource { name, property })
         }
-        None => {
-            // Return resource with provided name
-            Ok(Resource {
-                name: s,
-                property: String::from(""),
-            })
-        }
+        None => Ok(Resource {
+            name: s,
+            property: None,
+        }),
     }
 }
 
@@ -114,7 +110,7 @@ fn check_and_match_reference(resources: &Value, reference: &str) -> Option<Docke
                     is_context: true,
                 })
             } else {
-                // No build context
+                // TODO: Need to output right image
                 Some(DockerImageForPulumi {
                     name: Some("nginx".to_string()),
                     path: None,
@@ -122,10 +118,7 @@ fn check_and_match_reference(resources: &Value, reference: &str) -> Option<Docke
                 })
             }
         }
-        None => {
-            // No reference context
-            None
-        }
+        None => None,
     }
 }
 struct AppConfiguration<'a> {
@@ -134,15 +127,7 @@ struct AppConfiguration<'a> {
     ingress_configuration: Option<&'a Value>,
 }
 
-fn parse_app_configuration(
-    resources: &Value,
-    configuration: AppConfiguration,
-) -> Vec<ContainerAppConfiguration> {
-    let container = configuration.container;
-    let dapr_configuration = configuration.dapr_configuration;
-    let ingress_configuration = configuration.ingress_configuration;
-
-    // Handle build  context
+fn build_image_for_serialization(resources: &Value, container: &Value) -> DockerImageForPulumi {
     let image = match container.get("image") {
         Some(name) => {
             let resource =
@@ -169,58 +154,90 @@ fn parse_app_configuration(
         },
     };
 
+    image
+}
+
+fn build_name_for_serialization(container: &Value) -> String {
     let name = match container.get("name") {
         Some(name) => name.as_str().unwrap_or_default().to_string(),
         // TODO: define fallback value for name, should be yaml service name
         None => String::from(""),
     };
 
-    if dapr_configuration.is_some() {
-        // Check if dapr is enabled
-        let app_port = dapr_configuration
-            .unwrap_or(&Value::Null)
-            .get("enabled".to_string())
-            .unwrap_or(&Value::Null);
+    name
+}
 
-        let port = dapr_configuration
-            .unwrap_or(&Value::Null)
-            .get("appPort")
-            .unwrap_or(&Value::Null);
+struct PortsBuilder<'a> {
+    ingress_app_port: Option<&'a Value>,
+    ports: Option<Vec<String>>,
+}
 
-        let ingress_port = ingress_configuration
-            .unwrap_or(&Value::Null)
-            .get("external")
-            .and(
-                ingress_configuration
+fn build_ports_mapping(configuration: AppConfiguration) -> (&Value, Option<Vec<String>>) {
+    /*
+        TODO:
+        If dapr is not enabled and ingress is enabled, should expose port
+
+    */
+
+    let dapr_configuration = configuration.dapr_configuration;
+    let ingress_configuration = configuration.ingress_configuration;
+
+    let has_dapr_enabled = dapr_configuration
+        .unwrap_or(&Value::Null)
+        .get("enabled".to_string())
+        .unwrap_or(&Value::Null);
+
+    let dapr_app_port = dapr_configuration
+        .unwrap_or(&Value::Null)
+        .get("appPort")
+        .unwrap_or(&Value::Null);
+
+    let ingress_app_port = ingress_configuration
+        .unwrap_or(&Value::Null)
+        .get("external")
+        .and(
+            ingress_configuration
+                .unwrap_or(&Value::Null)
+                .get("targetPort"),
+        );
+
+    let mut ports: Vec<String> = vec![];
+
+    if has_dapr_enabled.as_bool() == Some(true) {
+        // Assert for now than source and target ports are same
+        ports.push(format!(
+            "{}:{}",
+            if ingress_app_port.is_some() {
+                ingress_app_port
                     .unwrap_or(&Value::Null)
-                    .get("targetPort"),
-            );
-        let mut ports: Vec<String> = vec![];
+                    .as_f64()
+                    .unwrap_or_default()
+                    .to_string()
+            } else {
+                dapr_app_port.as_f64().unwrap_or_default().to_string()
+            },
+            dapr_app_port.as_f64().unwrap_or_default().to_string()
+        ))
+    }
 
-        /*
-            TODO:
-            If dapr is not enabled and ingress is enabled, should expose port
+    (
+        dapr_app_port,
+        if !ports.is_empty() { Some(ports) } else { None },
+    )
+}
 
-        */
+fn parse_app_configuration(
+    resources: &Value,
+    configuration: AppConfiguration,
+) -> Vec<ContainerAppConfiguration> {
+    let container = configuration.container;
+    let dapr_configuration = configuration.dapr_configuration;
 
-        if app_port.as_bool() == Some(true) {
-            // Get ports in dapr config
-            println!("{:?}", port);
-            // Assert for now than source and target ports are same
-            ports.push(format!(
-                "{}:{}",
-                if ingress_port.is_some() {
-                    ingress_port
-                        .unwrap_or(&Value::Null)
-                        .as_f64()
-                        .unwrap_or_default()
-                        .to_string()
-                } else {
-                    port.as_f64().unwrap_or_default().to_string()
-                },
-                port.as_f64().unwrap_or_default().to_string()
-            ))
-        }
+    let image = build_image_for_serialization(resources, container);
+    let name = build_name_for_serialization(container);
+
+    if dapr_configuration.is_some() {
+        let (dapr_app_port, ports) = build_ports_mapping(configuration);
 
         // Push DaprContainerAppConfig too
         vec![
@@ -244,7 +261,7 @@ fn parse_app_configuration(
                 network_mode: None,
                 // TODO
                 environment: None,
-                ports: if ports.len() > 0 { Some(ports) } else { None },
+                ports: ports.clone(),
                 command: None,
             },
             // Dapr Sidecar config
@@ -256,7 +273,7 @@ fn parse_app_configuration(
                 network_mode: Some(format!("service:{}", String::from(&name))),
                 // TODO
                 environment: None,
-                ports: None,
+                ports: ports.clone(),
                 networks: None,
                 build: None,
                 command: Some(vec![
@@ -264,7 +281,7 @@ fn parse_app_configuration(
                     "-app-id".to_string(),
                     String::from(&name),
                     "-app-port".to_string(),
-                    format!("{}", port.as_f64().unwrap_or_default().to_string()),
+                    format!("{}", dapr_app_port.as_f64().unwrap_or_default().to_string()),
                     "-placement-host-address".to_string(),
                     "placement:50006".to_string(),
                     "air".to_string(),
@@ -290,9 +307,9 @@ fn parse_app_configuration(
             depends_on: None,
             // No Dapr network
             networks: None,
-            // TODO
             environment: None,
             network_mode: None,
+            // TODO: Can have port if ingress defined
             ports: None,
             command: None,
         }]
