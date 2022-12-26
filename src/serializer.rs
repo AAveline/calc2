@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use serde::{Deserialize, Serialize};
 use serde_yaml::Mapping;
 
@@ -12,11 +10,11 @@ pub enum Language {
     NotSupported,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BuildContext {
     pub context: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContainerAppConfiguration {
     #[serde(skip_serializing)]
     pub name: String,

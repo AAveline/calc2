@@ -1,3 +1,5 @@
+use std::fs;
+
 use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
@@ -45,7 +47,7 @@ impl Serializer for Pulumi {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Resource {
     name: String,
     property: Option<String>,
@@ -230,6 +232,15 @@ fn parse_app_configuration(
     resources: &Value,
     configuration: AppConfiguration,
 ) -> Vec<ContainerAppConfiguration> {
+    let file = fs::read_to_string("./test.js");
+
+    let d = file.unwrap();
+    let re = regex::Regex::new(r#"new app\.ContainerApp\("service1",\s*(\{.*\})\s*\)"#).unwrap();
+    let captures = re.captures(&d);
+
+    println!("{:?}", captures);
+    //let yaml_value: serde_yaml::Value = serde_yaml::from_value(b).unwrap();
+    //println!("{:?}", yaml_value);
     let container = configuration.container;
     let dapr_configuration = configuration.dapr_configuration;
 
@@ -298,6 +309,7 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
 
+    println!("{:?}", value);
     match value {
         Ok(v) => {
             // Check if a resources property exists
@@ -312,7 +324,6 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                     None => false,
                 }
             }
-
             let container_apps = as_mapping
                 .values()
                 .filter(|x| filter_by_type(x, "azure-native:app:ContainerApp"));
@@ -351,5 +362,55 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         }
 
         Err(_e) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_and_parse_resource_name() {
+        let input1 = "${resource.property}".to_string();
+        let expected_output1 = Ok(Resource {
+            name: "resource".to_string(),
+            property: Some("property".to_string()),
+        });
+        let result1 = extract_and_parse_resource_name(input1);
+        assert_eq!(result1, expected_output1);
+
+        let input2 = "resource".to_string();
+        let expected_output2 = Ok(Resource {
+            name: "resource".to_string(),
+            property: None,
+        });
+        let result2 = extract_and_parse_resource_name(input2);
+        assert_eq!(result2, expected_output2);
+    }
+
+    #[test]
+    fn test_deserialize_yaml() {
+        let wrong_format = r#"
+        resources:
+             containerapp:
+            type: azure-native:app:ContainerApp
+            properties:
+              configuration:
+                ingress:
+                  external: true
+                  targetPort: 80
+                dapr:
+                  appPort: 8000
+                  enabled: true
+                  appId: myapp
+              template:
+                containers:
+                  - image: ${myImage.name}
+                    name: myapp
+        "#;
+
+        let output = deserialize_yaml(wrong_format);
+        let empty: Vec<ContainerAppConfiguration> = vec![];
+        assert_eq!(None, output);
     }
 }
