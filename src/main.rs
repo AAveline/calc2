@@ -1,11 +1,11 @@
 pub mod pulumi;
 pub mod serializer;
-pub mod utils;
 
 use clap::{Parser, ValueEnum};
+
+use log::{error, info};
 use pulumi::Pulumi;
 use serializer::{Language, Serializer};
-
 use std::{fs, path::Path};
 
 const FILENAME: &str = "docker-compose.yml";
@@ -47,7 +47,10 @@ fn parse_language(filename: &str) -> Result<Language, Language> {
 }
 
 fn main() {
+    simple_logger::init().unwrap();
     let args = Args::parse();
+
+    info!("Starting...");
 
     let file = fs::read_to_string(&args.input);
 
@@ -60,7 +63,8 @@ fn main() {
 
             match args.provider {
                 Provider::Pulumi => {
-                    let mut provider = Pulumi::new(language).expect("Language is not supported");
+                    let mut provider =
+                        Pulumi::new(language).expect("Language is not supported for this provider");
 
                     let value = provider
                         .deserialize_value(&file)
@@ -72,21 +76,25 @@ fn main() {
                                 let old_file = fs::read_to_string(Path::new(FILENAME));
 
                                 match fs::write("docker-compose.old.yml", old_file.unwrap()) {
-                                    Ok(_r) => utils::write("Old file saved".to_string()),
-                                    Err(e) => utils::write_err(e.to_string()),
+                                    Ok(_r) => {
+                                        info!("Previous compose file dumped to >> docker-compose.old.yml")
+                                    }
+                                    Err(e) => error!("{}", e),
                                 };
                             }
 
                             fs::write(FILENAME, v).unwrap();
+
+                            info!("Completed!")
                         }
-                        Err(e) => utils::write_err(e.to_string()).unwrap(),
+                        Err(e) => error!("{}", e),
                     }
                 }
                 Provider::Azure => todo!(),
                 Provider::Terraform => todo!(),
             }
         }
-        Err(e) => println!("{}", e),
+        Err(e) => error!("{}", e),
     }
 }
 

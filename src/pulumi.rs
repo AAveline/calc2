@@ -1,3 +1,4 @@
+use log::{info, warn};
 use std::fs;
 
 use regex::Regex;
@@ -232,15 +233,6 @@ fn parse_app_configuration(
     resources: &Value,
     configuration: AppConfiguration,
 ) -> Vec<ContainerAppConfiguration> {
-    let file = fs::read_to_string("./test.js");
-
-    let d = file.unwrap();
-    let re = regex::Regex::new(r#"new app\.ContainerApp\("service1",\s*(\{.*\})\s*\)"#).unwrap();
-    let captures = re.captures(&d);
-
-    println!("{:?}", captures);
-    //let yaml_value: serde_yaml::Value = serde_yaml::from_value(b).unwrap();
-    //println!("{:?}", yaml_value);
     let container = configuration.container;
     let dapr_configuration = configuration.dapr_configuration;
 
@@ -309,12 +301,10 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
 
-    println!("{:?}", value);
     match value {
         Ok(v) => {
             // Check if a resources property exists
             let resources = v.get("resources")?;
-
             // If resources exists, then iterate over containersApp applications
             let as_mapping = resources.as_mapping()?;
 
