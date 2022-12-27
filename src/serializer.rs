@@ -112,4 +112,26 @@ fn merge_configuration_with_networks(mut configuration: Mapping, services: Mappi
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+
+    struct TestSerializer {}
+
+    impl Serializer for TestSerializer {
+        type Output = TestSerializer;
+        fn deserialize_value(&mut self, input: &str) -> Option<&Self> {
+            Some(self)
+        }
+    }
+
+    #[test]
+    fn test_serializer() {
+        let services: Vec<ContainerAppConfiguration> = Vec::new();
+
+        let a = TestSerializer {};
+
+        let s = a.serialize_value(&services);
+
+        // WIP
+    }
+}
