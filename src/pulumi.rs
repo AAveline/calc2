@@ -1,22 +1,25 @@
-use log::{info, warn};
-use std::fs;
-
+use log::{error, warn};
 use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
 
 use crate::serializer::{BuildContext, ContainerAppConfiguration, Language, Serializer};
 
+#[derive(Debug, PartialEq)]
+struct Resource {
+    name: String,
+    property: Option<String>,
+}
+
+struct AppConfiguration<'a> {
+    container: &'a Value,
+    dapr_configuration: Option<&'a Value>,
+    ingress_configuration: Option<&'a Value>,
+}
+
 pub struct Pulumi {
     language: Language,
     pub resources: Option<Vec<ContainerAppConfiguration>>,
-}
-
-#[derive(Debug)]
-pub struct DockerImageForPulumi {
-    name: Option<String>,
-    path: Option<String>,
-    is_context: bool,
 }
 
 impl Pulumi {
@@ -29,6 +32,12 @@ impl Pulumi {
             _ => None,
         }
     }
+}
+#[derive(Debug, PartialEq)]
+pub struct DockerImageForPulumi {
+    name: Option<String>,
+    path: Option<String>,
+    is_context: bool,
 }
 
 impl Serializer for Pulumi {
@@ -48,15 +57,8 @@ impl Serializer for Pulumi {
         }
     }
 }
-#[derive(Debug, PartialEq)]
-struct Resource {
-    name: String,
-    property: Option<String>,
-}
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
-    // TODO: Handle case where it's not a reference
-
     match Regex::new(r"\$\{(.+)\.(.+)\}")
         .expect("Should match previous regex")
         .captures(&s)
@@ -123,11 +125,6 @@ fn check_and_match_reference(resources: &Value, reference: &str) -> Option<Docke
         None => None,
     }
 }
-struct AppConfiguration<'a> {
-    container: &'a Value,
-    dapr_configuration: Option<&'a Value>,
-    ingress_configuration: Option<&'a Value>,
-}
 
 fn build_image_for_serialization(resources: &Value, container: &Value) -> DockerImageForPulumi {
     let image = match container.get("image") {
@@ -156,16 +153,6 @@ fn build_image_for_serialization(resources: &Value, container: &Value) -> Docker
     };
 
     image
-}
-
-fn build_name_for_serialization(container: &Value) -> String {
-    let name = match container.get("name") {
-        Some(name) => name.as_str().unwrap_or_default().to_string(),
-        // TODO: define fallback value for name, should be yaml service name
-        None => String::from(""),
-    };
-
-    name
 }
 
 fn build_ports_mapping_for_serialization(
@@ -237,7 +224,12 @@ fn parse_app_configuration(
     let dapr_configuration = configuration.dapr_configuration;
 
     let image = build_image_for_serialization(resources, container);
-    let name = build_name_for_serialization(container);
+    let name = container
+        .get("name")
+        .unwrap()
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
 
     if dapr_configuration.is_some() {
@@ -247,7 +239,7 @@ fn parse_app_configuration(
                 build: image.is_context.then(|| BuildContext {
                     context: image.path.unwrap(),
                 }),
-                name: String::from(&name),
+                name: name.clone(),
                 depends_on: Some(vec!["placement".to_string()]),
                 networks: Some(vec![String::from("dapr-network")]),
                 network_mode: None,
@@ -258,7 +250,7 @@ fn parse_app_configuration(
             // Dapr Sidecar config
             ContainerAppConfiguration {
                 image: Some(String::from("daprio/daprd:edge")),
-                name: format!("{}_dapr", String::from(&name)),
+                name: format!("{}_dapr", name.clone()),
                 depends_on: Some(vec![String::from(&name)]),
                 network_mode: Some(format!("service:{}", String::from(&name))),
                 environment: None,
@@ -290,7 +282,6 @@ fn parse_app_configuration(
             networks: None,
             environment: None,
             network_mode: None,
-            // TODO: Can have port if ingress defined
             ports: ports.clone(),
             command: None,
         }]
@@ -351,7 +342,10 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
             Some(services)
         }
 
-        Err(_e) => None,
+        Err(e) => {
+            error!("{}", e);
+            None
+        }
     }
 }
 
@@ -400,7 +394,135 @@ mod tests {
         "#;
 
         let output = deserialize_yaml(wrong_format);
-        let empty: Vec<ContainerAppConfiguration> = vec![];
+
         assert_eq!(None, output);
+    }
+
+    #[test]
+    fn test_build_image_for_serialization() {
+        let containers = r#"
+        with_reference:
+          image: ${myImage.name}
+          name: myapp
+        without_reference:
+          image: node-12
+          name: myapp
+        "#;
+
+        let input_without_resource_reference = r#"
+        resources:
+          containerapp:
+            type: azure-native:app:ContainerApp
+            properties:
+              configuration:
+                ingress:
+                  external: true
+                  targetPort: 80
+                dapr:
+                  appPort: 8000
+                  enabled: true
+                  appId: myapp
+              template:
+                containers:
+                  - image: ${myImage.name}
+                    name: myapp
+        "#;
+
+        let deserialized_containers = serde_yaml::Deserializer::from_str(containers);
+        let containers_value = Value::deserialize(deserialized_containers).unwrap();
+
+        let container_with_reference = containers_value.get("with_reference").unwrap();
+        let container_without_reference = containers_value.get("without_reference").unwrap();
+
+        let input = serde_yaml::Deserializer::from_str(input_without_resource_reference);
+        let value = Value::deserialize(input);
+
+        let output = build_image_for_serialization(
+            value.unwrap().get("resources").unwrap(),
+            container_with_reference,
+        );
+
+        let expected = DockerImageForPulumi {
+            name: Some("myImage".to_string()),
+            path: None,
+            is_context: false,
+        };
+
+        assert_eq!(expected, output);
+
+        let input_with_context = r#"
+        resources:
+          myImage:
+            type: docker:RegistryImage
+            properties:
+              name: ${registry.loginServer}/node-app:v1.0.0
+              build:
+                context: ${pulumi.cwd}/node-app
+            options:
+              provider: ${provider}
+          containerapp:
+            type: azure-native:app:ContainerApp
+            properties:
+              configuration:
+                ingress:
+                  external: true
+                  targetPort: 80
+                dapr:
+                  appPort: 8000
+                  enabled: true
+                  appId: myapp
+              template:
+                containers:
+                  - image: ${myImage.name}
+                    name: myapp
+        "#;
+        let deserialized_map = serde_yaml::Deserializer::from_str(input_with_context);
+        let value = Value::deserialize(deserialized_map);
+        let output = build_image_for_serialization(
+            value.unwrap().get("resources").unwrap(),
+            container_with_reference,
+        );
+
+        let expected = DockerImageForPulumi {
+            name: None,
+            path: Some("./node-app".to_string()),
+            is_context: true,
+        };
+
+        assert_eq!(expected, output);
+
+        let input_without_context = r#"
+        resources:
+          containerapp:
+            type: azure-native:app:ContainerApp
+            properties:
+              configuration:
+                ingress:
+                  external: true
+                  targetPort: 80
+                dapr:
+                  appPort: 8000
+                  enabled: true
+                  appId: myapp
+              template:
+                containers:
+                  - image: node-12
+                    name: myapp
+        "#;
+
+        let deserialized_map = serde_yaml::Deserializer::from_str(input_without_context);
+        let value = Value::deserialize(deserialized_map);
+        let output = build_image_for_serialization(
+            value.unwrap().get("resources").unwrap(),
+            container_without_reference,
+        );
+
+        let expected = DockerImageForPulumi {
+            name: Some("node-12".to_string()),
+            path: None,
+            is_context: false,
+        };
+
+        assert_eq!(expected, output);
     }
 }

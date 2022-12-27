@@ -34,15 +34,15 @@ enum Provider {
     Terraform,
 }
 
-fn parse_language(filename: &str) -> Result<Language, Language> {
+fn parse_language(filename: &str) -> Language {
     let language = Path::new(filename).extension().and_then(|val| val.to_str());
 
     match language {
-        Some("yml" | "yaml") => Ok(Language::Yaml),
-        Some("ts") => Ok(Language::Typescript),
-        Some("bicep") => Ok(Language::Bicep),
-        Some("json") => Ok(Language::Json),
-        _ => Err(Language::NotSupported),
+        Some("yml" | "yaml") => Language::Yaml,
+        Some("ts") => Language::Typescript,
+        Some("bicep") => Language::Bicep,
+        Some("json") => Language::Json,
+        _ => Language::NotSupported,
     }
 }
 
@@ -56,10 +56,7 @@ fn main() {
 
     match file {
         Ok(file) => {
-            let language = match parse_language(&args.input) {
-                Ok(r) => r,
-                Err(e) => e,
-            };
+            let language = parse_language(&args.input);
 
             match args.provider {
                 Provider::Pulumi => {
