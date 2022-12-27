@@ -110,3 +110,6 @@ fn merge_configuration_with_networks(mut configuration: Mapping, services: Mappi
 
     configuration
 }
+
+#[cfg(test)]
+mod tests {}

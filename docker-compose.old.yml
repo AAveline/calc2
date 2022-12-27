@@ -28,28 +28,10 @@ services:
     ports:
     - 80:80
   some-app:
-    depends_on:
-    - placement
-    networks:
-    - dapr-network
     ports:
     - 3000:3000
     build:
       context: ./node-app
-  some-app_dapr:
-    depends_on:
-    - some-app
-    image: daprio/daprd:edge
-    command:
-    - ./daprd
-    - -app-id
-    - some-app
-    - -app-port
-    - '3000'
-    - -placement-host-address
-    - placement:50006
-    - air
-    network_mode: service:some-app
   placement:
     networks:
     - dapr-network
