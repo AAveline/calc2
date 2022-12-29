@@ -1,4 +1,4 @@
-use log::{error, warn};
+use log::error;
 use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
