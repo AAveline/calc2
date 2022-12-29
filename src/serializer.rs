@@ -119,19 +119,92 @@ mod tests {
 
     impl Serializer for TestSerializer {
         type Output = TestSerializer;
-        fn deserialize_value(&mut self, input: &str) -> Option<&Self> {
+        fn deserialize_value(&mut self, _input: &str) -> Option<&Self> {
             Some(self)
         }
     }
 
     #[test]
     fn test_serializer() {
-        let services: Vec<ContainerAppConfiguration> = Vec::new();
+        let serializer = TestSerializer {};
 
-        let a = TestSerializer {};
+        let input = vec![
+            ContainerAppConfiguration {
+                image: None,
+                build: Some(BuildContext {
+                    context: "./node-app".to_string(),
+                }),
+                name: "myapp".to_string(),
+                depends_on: Some(vec!["placement".to_string()]),
+                networks: Some(vec![String::from("dapr-network")]),
+                network_mode: None,
+                environment: None,
+                ports: None,
+                command: None,
+            },
+            ContainerAppConfiguration {
+                image: Some(String::from("daprio/daprd:edge")),
+                name: format!("myapp_dapr"),
+                depends_on: Some(vec![String::from("myapp")]),
+                network_mode: Some(format!("service:{}", String::from("myapp"))),
+                environment: None,
+                ports: None,
+                networks: None,
+                build: None,
+                command: Some(vec![
+                    "./daprd".to_string(),
+                    "-app-id".to_string(),
+                    String::from("myapp"),
+                    "-app-port".to_string(),
+                    "3000".to_string(),
+                    "-placement-host-address".to_string(),
+                    "placement:50006".to_string(),
+                    "air".to_string(),
+                ]),
+            },
+        ];
 
-        let s = a.serialize_value(&services);
+        let file = r#"version: '3.9'
+services:
+  myapp:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    build:
+      context: ./node-app
+  myapp_dapr:
+    depends_on:
+    - myapp
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - myapp
+    - -app-port
+    - '3000'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:myapp
+  placement:
+    networks:
+    - dapr-network
+    image: daprio/dapr
+    ports:
+    - 50006:50006
+    command:
+    - ./placement
+    - -port
+    - '50006'
+networks:
+  dapr-network: {}
+"#
+        .as_bytes()
+        .to_vec();
 
-        // WIP
+        let output = serializer.serialize_value(&input).unwrap();
+
+        assert_eq!(output, file);
     }
 }
