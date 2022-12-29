@@ -148,6 +148,37 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_configuration_with_networks() {
+        let mut expected = Mapping::new();
+        expected.insert(
+            serde_yaml::to_value("version").unwrap(),
+            serde_yaml::to_value("3.9").unwrap(),
+        );
+
+        expected.insert(
+            serde_yaml::to_value("services").unwrap(),
+            serde_yaml::to_value(Mapping::new()).unwrap(),
+        );
+
+        let dapr_network = Mapping::new();
+
+        let mut networks = Mapping::new();
+
+        networks.insert(
+            serde_yaml::to_value("dapr-network").unwrap(),
+            serde_yaml::to_value(dapr_network).unwrap(),
+        );
+
+        expected.insert(
+            serde_yaml::to_value("networks").unwrap(),
+            serde_yaml::to_value(networks).unwrap(),
+        );
+        let output = merge_configuration_with_networks(Mapping::new(), Mapping::new());
+
+        assert_eq!(expected, output)
+    }
+
+    #[test]
     fn test_serializer() {
         let serializer = TestSerializer {};
 
