@@ -362,20 +362,20 @@ mod tests {
     #[test]
     fn test_extract_and_parse_resource_name() {
         let input1 = "${resource.property}".to_string();
-        let expected_output1 = Ok(Resource {
+        let expected = Ok(Resource {
             name: "resource".to_string(),
             property: Some("property".to_string()),
         });
-        let result1 = extract_and_parse_resource_name(input1);
-        assert_eq!(result1, expected_output1);
+        let output = extract_and_parse_resource_name(input1);
+        assert_eq!(expected, output);
 
         let input2 = "resource".to_string();
-        let expected_output2 = Ok(Resource {
+        let expected = Ok(Resource {
             name: "resource".to_string(),
             property: None,
         });
-        let result2 = extract_and_parse_resource_name(input2);
-        assert_eq!(result2, expected_output2);
+        let output = extract_and_parse_resource_name(input2);
+        assert_eq!(expected, output);
     }
 
     #[test]

@@ -125,6 +125,29 @@ mod tests {
     }
 
     #[test]
+    fn test_default_configuration() {
+        let expected = ContainerAppConfiguration {
+            name: String::from("placement"),
+            ports: Some(vec!["50006:50006".to_string()]),
+            networks: Some(vec!["dapr-network".to_string()]),
+            image: Some("daprio/dapr".to_string()),
+            command: Some(vec![
+                "./placement".to_string(),
+                "-port".to_string(),
+                "50006".to_string(),
+            ]),
+            depends_on: None,
+            environment: None,
+            network_mode: None,
+            build: None,
+        };
+
+        let output = default_configuration();
+
+        assert_eq!(expected, output)
+    }
+
+    #[test]
     fn test_serializer() {
         let serializer = TestSerializer {};
 
@@ -164,7 +187,7 @@ mod tests {
             },
         ];
 
-        let file = r#"version: '3.9'
+        let expected = r#"version: '3.9'
 services:
   myapp:
     depends_on:
@@ -205,6 +228,6 @@ networks:
 
         let output = serializer.serialize_value(&input).unwrap();
 
-        assert_eq!(output, file);
+        assert_eq!(expected, output);
     }
 }
