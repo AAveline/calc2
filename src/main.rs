@@ -20,8 +20,8 @@ struct Args {
     #[arg(short, long)]
     input: String,
     // Output folder
-    //#[arg(short, long)]
-    //output: String,
+    #[arg(short, long)]
+    output: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
@@ -53,6 +53,7 @@ fn main() {
     info!("Starting...");
 
     let file = fs::read_to_string(&args.input);
+    let path = format!("{}/{}", args.output, FILENAME);
 
     match file {
         Ok(file) => {
@@ -69,10 +70,12 @@ fn main() {
 
                     match value.serialize_value(&value.resources.as_ref().unwrap()) {
                         Ok(v) => {
-                            if Path::new(FILENAME).exists() {
-                                let old_file = fs::read_to_string(Path::new(FILENAME));
+                            if Path::new(&path).exists() {
+                                let old_file = fs::read_to_string(Path::new(&path));
+                                let old_file_path =
+                                    format!("{}/{}", args.output, "docker-compose.old.yml");
 
-                                match fs::write("docker-compose.old.yml", old_file.unwrap()) {
+                                match fs::write(old_file_path, old_file.unwrap()) {
                                     Ok(_r) => {
                                         info!("Previous compose file dumped to >> docker-compose.old.yml")
                                     }
@@ -80,7 +83,7 @@ fn main() {
                                 };
                             }
 
-                            fs::write(FILENAME, v).unwrap();
+                            fs::write(&path, v).unwrap();
 
                             info!("Completed!")
                         }
