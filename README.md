@@ -10,3 +10,6 @@ At this moment, only the `Pulumi` provider with `Yaml` and `Javascript` language
 ## How it works ?
 - Get the binary from github release
 - Go to the folder where you run your IAC provider (Pulumi for the moment) and run the binary `./<binary> pulumi --input <file>.yml`
+
+## Limitations
+- Cannot handle multiple files as input for now
