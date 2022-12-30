@@ -5,6 +5,7 @@ use serde_yaml::Mapping;
 pub enum Language {
     Yaml,
     Typescript,
+    Javascript,
     Json,
     Bicep,
     NotSupported,

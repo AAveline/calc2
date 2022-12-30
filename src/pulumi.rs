@@ -1,5 +1,5 @@
 use log::error;
-use regex::Regex;
+use regex::{Captures, Regex};
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -26,7 +26,7 @@ pub struct Pulumi {
 impl Pulumi {
     pub fn new(language: Language) -> Option<Pulumi> {
         match language {
-            Language::Yaml | Language::Typescript => Some(Pulumi {
+            Language::Yaml | Language::Typescript | Language::Javascript => Some(Pulumi {
                 language,
                 resources: None,
             }),
@@ -52,9 +52,17 @@ impl Serializer for Pulumi {
                 }
                 None => None,
             },
-            Language::Typescript => todo!(),
-            // TODO: Return an error with context
-            _ => None,
+            Language::Typescript | Language::Javascript => match deserialize_js(input) {
+                Some(value) => {
+                    self.resources = Some(value);
+                    Some(self)
+                }
+                None => None,
+            },
+            _ => {
+                error!("Language not supported");
+                None
+            }
         }
     }
 }
@@ -355,6 +363,20 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     }
 }
 
+fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
+    //regex : (new (docker.Image|app.ContainerApp)\()(\".+\"),( ?)(((((?!}).+)+\n)?)+(}))
+    let re = Regex::new(r####"new docker.Image\("(.+)",( ?)(\{(\n.+)+[^;\n.+])"####).unwrap();
+    let images_services: Vec<Captures> = re.captures_iter(&input).collect();
+
+    let mut b = Vec::new();
+    for i in images_services {
+        let a = i.get(3).unwrap().as_str();
+        b.push(a);
+    }
+
+    println!("{:?}", b.len());
+    None
+}
 #[cfg(test)]
 mod tests {
     use super::*;
