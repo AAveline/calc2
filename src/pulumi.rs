@@ -364,21 +364,22 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 }
 
 fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
-    let images_services: Vec<&str> =
-        Regex::new(r####"new docker.Image\("(.+)",( ?)(\{(\n.+)+[^;s\n.+])"####)
+    let images_services: Vec<(String, String)> =
+        Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####)
             .unwrap()
             .captures_iter(&input)
-            .map(|image| image.get(3).unwrap().as_str())
+            .map(|image| (image["name"].to_owned(), image["value"].to_owned()))
             .collect();
 
-    let container_app_services: Vec<&str> =
-        Regex::new(r####"new app.ContainerApp\("(.+)",( ?)(\{(\n.+)+[^;s\n.+])"####)
-            .unwrap()
-            .captures_iter(&input)
-            .map(|image| image.get(3).unwrap().as_str())
-            .collect();
+    let container_app_services: Vec<(String, String)> = Regex::new(
+        r####"new app.ContainerApp\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####,
+    )
+    .unwrap()
+    .captures_iter(&input)
+    .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
+    .collect();
 
-    for image in images_services {
+    for (image_name, image) in images_services {
         let lines = image.lines();
         /*
             Because of the JS/TS formatting, cast object as JSON is not possible (it will miss obviously some double-quotes for reference)
@@ -394,18 +395,26 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                 - build
                 - imageName
         */
+        //println!("{image_name}");
         for line in lines {
             if line.contains("imageName") || line.contains("context") {
                 /*
                     Regex to catch the following context:
                     <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
                 */
-                println!("line => {}", line);
+
+                let a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
+                    .unwrap()
+                    .captures(line)
+                    .unwrap();
+
+                // TODO: use named group for refex
+                println!("property: {}, value: {} ", &a["name"], &a["value"])
             }
         }
     }
 
-    for container in container_app_services {
+    for (_container_name, container) in container_app_services {
         let lines = container.lines();
         /*
             app.ContainerApp
@@ -414,7 +423,7 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                 - template
         */
         for line in lines {
-            println!("{}", line)
+            // println!("{}", line)
         }
     }
 
