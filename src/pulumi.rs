@@ -1,5 +1,5 @@
 use log::error;
-use regex::{Captures, Regex};
+use regex::Regex;
 use serde::Deserialize;
 use serde_yaml::Value;
 
@@ -364,17 +364,60 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 }
 
 fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
-    //regex : (new (docker.Image|app.ContainerApp)\()(\".+\"),( ?)(((((?!}).+)+\n)?)+(}))
-    let re = Regex::new(r####"new docker.Image\("(.+)",( ?)(\{(\n.+)+[^;\n.+])"####).unwrap();
-    let images_services: Vec<Captures> = re.captures_iter(&input).collect();
+    let images_services: Vec<&str> =
+        Regex::new(r####"new docker.Image\("(.+)",( ?)(\{(\n.+)+[^;s\n.+])"####)
+            .unwrap()
+            .captures_iter(&input)
+            .map(|image| image.get(3).unwrap().as_str())
+            .collect();
 
-    let mut b = Vec::new();
-    for i in images_services {
-        let a = i.get(3).unwrap().as_str();
-        b.push(a);
+    let container_app_services: Vec<&str> =
+        Regex::new(r####"new app.ContainerApp\("(.+)",( ?)(\{(\n.+)+[^;s\n.+])"####)
+            .unwrap()
+            .captures_iter(&input)
+            .map(|image| image.get(3).unwrap().as_str())
+            .collect();
+
+    for image in images_services {
+        let lines = image.lines();
+        /*
+            Because of the JS/TS formatting, cast object as JSON is not possible (it will miss obviously some double-quotes for reference)
+            So, the following approach will be selected:
+            - Read each line of the previous matches
+            - Get the following properties by resource type
+            - Cast it to YAML structure (for now, in the futur it will be to casted as an intermediate value)
+            - Then use the YAML parser
+        */
+        /*
+            docker.Image
+            Should target the following properties:
+                - build
+                - imageName
+        */
+        for line in lines {
+            if line.contains("imageName") || line.contains("context") {
+                /*
+                    Regex to catch the following context:
+                    <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
+                */
+                println!("line => {}", line);
+            }
+        }
     }
 
-    println!("{:?}", b.len());
+    for container in container_app_services {
+        let lines = container.lines();
+        /*
+            app.ContainerApp
+            Should target the following properties:
+                - configuration
+                - template
+        */
+        for line in lines {
+            println!("{}", line)
+        }
+    }
+
     None
 }
 #[cfg(test)]

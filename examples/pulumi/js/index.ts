@@ -16,7 +16,9 @@ import {
 
 const remixImage = new docker.Image("remix", {
     imageName: pulumi.interpolate`${registry.loginServer}/remix:v1`,
-    build: { context: `../frontend` },
+    build: { 
+      context: `../frontend` 
+    },
     registry: {
         server: registry.loginServer,
         username: adminUsername,
