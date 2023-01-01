@@ -363,6 +363,28 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     }
 }
 
+fn get_value(line: &str) -> (String, String) {
+    /*
+        Regex to catch the following context:
+        <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
+    */
+
+    let mut a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
+        .unwrap()
+        .captures(line);
+
+    if a.is_some() {
+        let a = a.unwrap();
+        let (name, value) = (&a["name"], &a["value"]);
+
+        (name.to_owned(), value.to_owned())
+    } else {
+        (line.to_owned(), "".to_string())
+    }
+}
+
+fn parse_property() {}
+
 fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let images_services: Vec<(String, String)> =
         Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####)
@@ -396,22 +418,31 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                 - imageName
         */
         //println!("{image_name}");
+        let s = "";
+        println!("{image}");
         for line in lines {
-            if line.contains("imageName") || line.contains("context") {
-                /*
-                    Regex to catch the following context:
-                    <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
-                */
-
-                let a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
-                    .unwrap()
-                    .captures(line)
-                    .unwrap();
-
-                // TODO: use named group for refex
-                println!("property: {}, value: {} ", &a["name"], &a["value"])
-            }
+            let (mut name, mut value) = get_value(line);
+            let has_value = value.is_empty();
+            let a = format!(
+                "\"{}\"{}
+                 \"{}\"",
+                name,
+                if !has_value {
+                    ": ".to_string()
+                } else {
+                    "".to_string()
+                },
+                if value.is_empty() {
+                    "".to_string()
+                } else {
+                    value
+                }
+            );
+            println!("{a}");
+            s.to_owned().push_str(&a);
         }
+
+        println!("{}", s)
     }
 
     for (_container_name, container) in container_app_services {
@@ -423,7 +454,12 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                 - template
         */
         for line in lines {
-            // println!("{}", line)
+            if line.contains("configuration") || line.contains("template") {
+                let (mut name, mut value) = get_value(line);
+                while value.contains("{") {
+                    (name, value) = get_value(value.as_str());
+                }
+            }
         }
     }
 
