@@ -1,6 +1,6 @@
 use log::error;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use crate::serializer::{BuildContext, ContainerAppConfiguration, Language, Serializer};
@@ -369,7 +369,7 @@ fn get_value(line: &str) -> (String, String) {
         <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
     */
 
-    let mut a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
+    let a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
         .unwrap()
         .captures(line);
 
@@ -377,14 +377,30 @@ fn get_value(line: &str) -> (String, String) {
         let a = a.unwrap();
         let (name, value) = (&a["name"], &a["value"]);
 
-        (name.to_owned(), value.to_owned())
+        (name.trim().to_owned(), value.trim().to_owned())
     } else {
-        (line.to_owned(), "".to_string())
+        let re = Regex::new(r"(: {1,})").unwrap();
+
+        let a = re.captures(line);
+
+        if a.is_some() {
+            let a = a.unwrap();
+            (
+                line.replace(a.get(1).unwrap().as_str(), "")
+                    .trim()
+                    .to_owned(),
+                "".to_string(),
+            )
+        } else {
+            (line.trim().to_owned(), "".to_string())
+        }
     }
 }
 
-fn parse_property() {}
-
+#[derive(Serialize, Deserialize, Debug)]
+struct Image {
+    imageName: String,
+}
 fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let images_services: Vec<(String, String)> =
         Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####)
@@ -401,68 +417,94 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
     .collect();
 
-    for (image_name, image) in images_services {
-        let lines = image.lines();
-        /*
-            Because of the JS/TS formatting, cast object as JSON is not possible (it will miss obviously some double-quotes for reference)
-            So, the following approach will be selected:
-            - Read each line of the previous matches
-            - Get the following properties by resource type
-            - Cast it to YAML structure (for now, in the futur it will be to casted as an intermediate value)
-            - Then use the YAML parser
-        */
-        /*
-            docker.Image
-            Should target the following properties:
-                - build
-                - imageName
-        */
-        //println!("{image_name}");
-        let s = "";
-        println!("{image}");
-        for line in lines {
-            let (mut name, mut value) = get_value(line);
-            let has_value = value.is_empty();
-            let a = format!(
-                "\"{}\"{}
-                 \"{}\"",
-                name,
-                if !has_value {
-                    ": ".to_string()
-                } else {
-                    "".to_string()
-                },
-                if value.is_empty() {
-                    "".to_string()
-                } else {
-                    value
+    for (_image_name, image) in images_services {
+        let mut s = String::from("");
+        for line in image.trim().lines() {
+            let (name, value) = get_value(line);
+
+            let mut a = format!("{name} {value} \n");
+            let (name, value) = get_value(line);
+
+            a = format!("{name} {value} \n");
+            s.push_str(&a);
+        }
+        s = s
+            .replace("},:", "},")
+            .replace("{:", "{")
+            .replace("}):", "}")
+            .replace("`", "")
+            .replace("pulumi.interpolate", "");
+
+        let mut b = String::from("");
+
+        //[a-zA-Z0-9${}./:]+
+        for line in s.lines() {
+            //      println!("{line}");
+            let re = Regex::new(r####"([a-zA-Z"]+):? ([a-zA-Z0-9${}./:"]+)"####)
+                .unwrap()
+                .captures(line);
+
+            let a = match re {
+                Some(r) => {
+                    let a = format!(
+                        "\"{}\": \"{}\"",
+                        r.get(1).unwrap().as_str(),
+                        r.get(2).unwrap().as_str()
+                    );
+                    a
                 }
-            );
-            println!("{a}");
-            s.to_owned().push_str(&a);
+                None => line.to_owned(),
+            };
+
+            b.push_str(&a);
+        }
+        b = b
+            .replace("\"{\"", "{")
+            .replace(")", "")
+            .replace("\"\"", "\",\"");
+
+        let mut c = String::from("");
+
+        for line in b.lines() {
+            let lifting = Regex::new(r"[a-zA-Z]+( )+").unwrap().captures(line);
+
+            let b = match lifting {
+                Some(r) => {
+                    let a = format!("\"{}\":", r.get(0).unwrap().as_str()).replace(" ", "");
+
+                    line.replace(r.get(0).unwrap().as_str(), &a)
+                }
+                None => line.to_string(),
+            };
+
+            c.push_str(&b);
         }
 
-        println!("{}", s)
-    }
+        c = c.replace(" ", "").replace("},}", "}}");
+        println!("{}", c);
 
-    for (_container_name, container) in container_app_services {
-        let lines = container.lines();
-        /*
-            app.ContainerApp
-            Should target the following properties:
-                - configuration
-                - template
-        */
-        for line in lines {
-            if line.contains("configuration") || line.contains("template") {
-                let (mut name, mut value) = get_value(line);
-                while value.contains("{") {
-                    (name, value) = get_value(value.as_str());
+        //  let to_json: Image = serde_json::from_str(&c).unwrap();
+        //println!("{:?}", to_json);
+    }
+    /*
+        for (_container_name, container) in container_app_services {
+            let lines = container.lines();
+            /*
+                app.ContainerApp
+                Should target the following properties:
+                    - configuration
+                    - template
+            */
+            for line in lines {
+                if line.contains("configuration") || line.contains("template") {
+                    let (mut name, mut value) = get_value(line);
+                    while value.contains("{") {
+                        (name, value) = get_value(value.as_str());
+                    }
                 }
             }
         }
-    }
-
+    */
     None
 }
 #[cfg(test)]

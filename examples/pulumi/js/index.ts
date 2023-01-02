@@ -17,11 +17,12 @@ import {
 const remixImage = new docker.Image("remix", {
     imageName: pulumi.interpolate`${registry.loginServer}/remix:v1`,
     build: { 
-      context: `../frontend` 
+      context: `../frontend`,
+       test: `gloup`
     },
     registry: {
         server: registry.loginServer,
-        username: adminUsername,
+        username:     adminUsername,
         password: adminPassword,
     },
 });
@@ -40,7 +41,7 @@ const service2Image = new docker.Image("service2", {
     imageName: pulumi.interpolate`${registry.loginServer}/service2:v1`,
     build: { context: `../services/service2` },
     registry: {
-        server: registry.loginServer,
+        server : registry.loginServer,
         username: adminUsername,
         password: adminPassword,
     },
