@@ -409,25 +409,16 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
             .map(|image| (image["name"].to_owned(), image["value"].to_owned()))
             .collect();
 
-    let container_app_services: Vec<(String, String)> = Regex::new(
-        r####"new app.ContainerApp\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####,
-    )
-    .unwrap()
-    .captures_iter(&input)
-    .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
-    .collect();
-
     for (_image_name, image) in images_services {
         let mut s = String::from("");
+
         for line in image.trim().lines() {
+            //println!("{line}");
             let (name, value) = get_value(line);
-
-            let mut a = format!("{name} {value} \n");
-            let (name, value) = get_value(line);
-
-            a = format!("{name} {value} \n");
+            let a = format!("{name} {value} \n");
             s.push_str(&a);
         }
+
         s = s
             .replace("},:", "},")
             .replace("{:", "{")
@@ -435,36 +426,37 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
             .replace("`", "")
             .replace("pulumi.interpolate", "");
 
+        //println!("s => {s}");
         let mut b = String::from("");
 
-        //[a-zA-Z0-9${}./:]+
+        //
         for line in s.lines() {
-            //      println!("{line}");
-            let re = Regex::new(r####"([a-zA-Z"]+):? ([a-zA-Z0-9${}./:"]+)"####)
+            // println!("{line}");
+            let re: Vec<String> = Regex::new(r####"([a-zA-Z"]+):? ([a-zA-Z0-9${},./:"]+)( }?)"####)
                 .unwrap()
-                .captures(line);
-
-            let a = match re {
-                Some(r) => {
+                .captures_iter(line)
+                .map(|capture| {
                     let a = format!(
-                        "\"{}\": \"{}\"",
-                        r.get(1).unwrap().as_str(),
-                        r.get(2).unwrap().as_str()
+                        "\"{}\": \"{}\" {}",
+                        capture.get(1).unwrap().as_str(),
+                        capture.get(2).unwrap().as_str(),
+                        capture.get(3).unwrap().as_str()
                     );
                     a
-                }
-                None => line.to_owned(),
-            };
+                })
+                .collect();
 
-            b.push_str(&a);
+            let str = re.join("");
+
+            b.push_str(if str.is_empty() { line } else { &str });
         }
-        b = b
-            .replace("\"{\"", "{")
-            .replace(")", "")
-            .replace("\"\"", "\",\"");
+        //println!("b =>{b}");
+        b = b.replace("\"{\"", "{").replace(")", "");
 
         let mut c = String::from("");
 
+        // println!("{b}");
+        // Remove all trailing spaces
         for line in b.lines() {
             let lifting = Regex::new(r"[a-zA-Z]+( )+").unwrap().captures(line);
 
@@ -480,13 +472,108 @@ fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
             c.push_str(&b);
         }
 
-        c = c.replace(" ", "").replace("},}", "}}");
+        c = c
+            .replace(" ", "")
+            .replace("},}", "}}")
+            // Append coma
+            .replace("\"\"", "\",\"")
+            .replace("}\"", "},\"");
+        //println!("{}", c);
+
+        let to_json: Image = serde_json::from_str(&c).unwrap();
+        println!("{:?}", to_json);
+    }
+    let container_app_services: Vec<(String, String)> = Regex::new(
+        r####"new app.ContainerApp\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####,
+    )
+    .unwrap()
+    .captures_iter(&input)
+    .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
+    .collect();
+    for (_container_name, container) in container_app_services {
+        let mut s = String::from("");
+
+        for line in container.trim().lines() {
+            //println!("{line}");
+            let (name, value) = get_value(line);
+            let a = format!("{name} {value} \n");
+            s.push_str(&a);
+        }
+
+        s = s
+            .replace("},:", "},")
+            .replace("{:", "{")
+            .replace("}):", "}")
+            .replace("`", "")
+            .replace("pulumi.interpolate", "");
+
+        //println!("s => {s}");
+        let mut b = String::from("");
+
+        //
+        for line in s.lines() {
+            // println!("{line}");
+            let re: Vec<String> =
+                Regex::new(r####"([a-zA-Z"]+):? ([a-zA-Z0-9\[\]${},./:"]+)( }?)"####)
+                    .unwrap()
+                    .captures_iter(line)
+                    .map(|capture| {
+                        let a = format!(
+                            "\"{}\": \"{}\" {}",
+                            capture.get(1).unwrap().as_str(),
+                            capture.get(2).unwrap().as_str(),
+                            capture.get(3).unwrap().as_str()
+                        );
+                        a
+                    })
+                    .collect();
+
+            let str = re.join("");
+
+            b.push_str(if str.is_empty() { line } else { &str });
+        }
+        //println!("b =>{b}");
+        b = b.replace("\"{\"", "{").replace(")", "");
+
+        let mut c = String::from("");
+
+        // println!("{b}");
+        // Remove all trailing spaces
+        for line in b.lines() {
+            let lifting = Regex::new(r"[a-zA-Z]+( )+").unwrap().captures(line);
+
+            let b = match lifting {
+                Some(r) => {
+                    let a = format!("\"{}\":", r.get(0).unwrap().as_str()).replace(" ", "");
+
+                    line.replace(r.get(0).unwrap().as_str(), &a)
+                }
+                None => line.to_string(),
+            };
+
+            c.push_str(&b);
+        }
+
+        c = c
+            .replace(" ", "")
+            .replace("},}", "}}")
+            // Append coma
+            // .replace("\":\",\"", "\":\"")
+            .replace("\",\"", "\"")
+            .replace("}\"", "},\"");
         println!("{}", c);
 
-        //  let to_json: Image = serde_json::from_str(&c).unwrap();
-        //println!("{:?}", to_json);
+        let to_json: Image = serde_json::from_str(&c).unwrap();
+        println!("{:?}", to_json);
     }
     /*
+    let container_app_services: Vec<(String, String)> = Regex::new(
+        r####"new app.ContainerApp\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s\n.+])"####,
+    )
+    .unwrap()
+    .captures_iter(&input)
+    .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
+    .collect();
         for (_container_name, container) in container_app_services {
             let lines = container.lines();
             /*
