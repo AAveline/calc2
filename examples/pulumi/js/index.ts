@@ -39,7 +39,9 @@ const service1Image = new docker.Image("service1", {
 
 const service2Image = new docker.Image("service2", {
     imageName: pulumi.interpolate`${registry.loginServer}/service2:v1`,
-    build: { context: `../services/service2` },
+    build: { 
+        context: `../services/service2` 
+    },
     registry: {
         server : registry.loginServer,
         username: adminUsername,
