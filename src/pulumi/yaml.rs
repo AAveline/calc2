@@ -1,11 +1,9 @@
-use std::fmt::format;
-
 use log::error;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_yaml::Value;
 
-use crate::serializer::{BuildContext, ContainerAppConfiguration, Language, Serializer};
+use crate::serializer::{BuildContext, ContainerAppConfiguration};
 
 #[derive(Debug, PartialEq)]
 struct Resource {
@@ -13,29 +11,6 @@ struct Resource {
     property: Option<String>,
 }
 
-#[derive(Debug)]
-struct AppConfiguration<'a> {
-    container: &'a Value,
-    dapr_configuration: Option<&'a Value>,
-    ingress_configuration: Option<&'a Value>,
-}
-
-pub struct Pulumi {
-    language: Language,
-    pub resources: Option<Vec<ContainerAppConfiguration>>,
-}
-
-impl Pulumi {
-    pub fn new(language: Language) -> Option<Pulumi> {
-        match language {
-            Language::Yaml | Language::Typescript | Language::Javascript => Some(Pulumi {
-                language,
-                resources: None,
-            }),
-            _ => None,
-        }
-    }
-}
 #[derive(Debug, PartialEq)]
 pub struct DockerImageForPulumi {
     name: Option<String>,
@@ -43,30 +18,11 @@ pub struct DockerImageForPulumi {
     is_context: bool,
 }
 
-impl Serializer for Pulumi {
-    type Output = Pulumi;
-    fn deserialize_value(&mut self, input: &str) -> Option<&Self> {
-        match self.language {
-            Language::Yaml => match deserialize_yaml(input) {
-                Some(value) => {
-                    self.resources = Some(value);
-                    Some(self)
-                }
-                None => None,
-            },
-            Language::Typescript | Language::Javascript => match deserialize_js(input) {
-                Some(value) => {
-                    self.resources = Some(value);
-                    Some(self)
-                }
-                None => None,
-            },
-            _ => {
-                error!("Language not supported");
-                None
-            }
-        }
-    }
+#[derive(Debug)]
+pub struct AppConfiguration<'a> {
+    pub container: &'a Value,
+    pub dapr_configuration: Option<&'a Value>,
+    pub ingress_configuration: Option<&'a Value>,
 }
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
@@ -304,7 +260,7 @@ fn parse_app_configuration(
     }
 }
 
-pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
+pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
 
@@ -365,174 +321,8 @@ pub fn deserialize_yaml(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     }
 }
 
-fn get_value(line: &str) -> (String, String) {
-    /*
-        Regex to catch the following context:
-        <"|' ><property><"|' ><:|: ><"|'|`| ><value><"|'|`| >
-    */
-
-    let a = Regex::new(r####"(("?)(?P<name>\w+)("?)):( ?)(?P<value>.+[^,\n])"####)
-        .unwrap()
-        .captures(line);
-
-    if a.is_some() {
-        let a = a.unwrap();
-        let (name, value) = (&a["name"], &a["value"]);
-
-        (name.trim().to_owned(), value.trim().to_owned())
-    } else {
-        let re = Regex::new(r"(: {1,})").unwrap();
-
-        let a = re.captures(line);
-
-        if a.is_some() {
-            let a = a.unwrap();
-            (
-                line.replace(a.get(1).unwrap().as_str(), "")
-                    .trim()
-                    .to_owned(),
-                "".to_string(),
-            )
-        } else {
-            (line.trim().to_owned(), "".to_string())
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Image {
-    imageName: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Dapr {
-    enabled: String,
-    appPort: String,
-    appId: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Configuration {
-    dapr: Dapr,
-}
-#[derive(Serialize, Deserialize, Debug)]
-struct Container {
-    resourceGroupName: String,
-    managedEnvironmentId: String,
-    configuration: Configuration,
-}
-
-fn deserialize_js(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
-    let images_services: Vec<(String, String)> =
-        Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
-            .unwrap()
-            .captures_iter(&input)
-            .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
-            .collect();
-    for (_image_name, image) in images_services {
-        let mut s = String::from("");
-
-        for line in image.trim().lines() {
-            let a = line.replace(" ", "");
-            let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`$"\{}\[\]]+)?"####).unwrap();
-
-            // println!("{a}");
-            let captures = re.captures(&a);
-            let computed = match captures {
-                Some(c) => {
-                    let key = c.get(1).unwrap().as_str();
-                    let value = if c.get(3).is_some() {
-                        let computed = c.get(3).unwrap().as_str();
-                        let with_quotes = format!("\"{}\",", computed);
-                        let tokens = ["{", "[{"];
-                        let has_token = tokens.contains(&computed);
-
-                        if has_token {
-                            computed.to_string()
-                        } else {
-                            with_quotes
-                        }
-                    } else {
-                        "".to_string()
-                    };
-
-                    let key = format!("\"{}\"", key).replace("\"\"", "\"");
-                    let value = value.replace("\"\"", "\"");
-
-                    let computed = format!("{key}:{value}");
-
-                    computed
-                }
-                None => a.to_string(),
-            };
-
-            s.push_str(&computed)
-        }
-
-        s = s.replace("})", "}").replace(",}", "}");
-
-        let to_json: Image = serde_json::from_str(&s).unwrap();
-        println!("{:?}", to_json)
-    }
-
-    let container_app_services: Vec<(String, String)> = Regex::new(
-        r####"new app.ContainerApp\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####,
-    )
-    .unwrap()
-    .captures_iter(&input)
-    .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
-    .collect();
-    for (_container_name, container) in container_app_services {
-        let mut s = String::from("");
-
-        for line in container.trim().lines() {
-            let a = line.replace(" ", "");
-            let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9"\{}\[\]]+)?"####).unwrap();
-
-            let captures = re.captures(&a);
-            let computed = match captures {
-                Some(c) => {
-                    let key = c.get(1).unwrap().as_str();
-                    let value = if c.get(3).is_some() {
-                        let computed = c.get(3).unwrap().as_str();
-                        let with_quotes = format!("\"{}\",", computed);
-                        let tokens = ["{", "[{"];
-                        let has_token = tokens.contains(&computed);
-
-                        if has_token {
-                            computed.to_string()
-                        } else {
-                            with_quotes
-                        }
-                    } else {
-                        "".to_string()
-                    };
-
-                    let key = format!("\"{}\"", key).replace("\"\"", "\"");
-                    let value = value.replace("\"\"", "\"");
-
-                    let computed = format!("{key}:{value}");
-
-                    computed
-                }
-                None => a.to_string(),
-            };
-
-            s.push_str(&computed)
-        }
-
-        s = s.replace("})", "}").replace(",}", "}");
-
-        let to_json: Container = serde_json::from_str(&s).unwrap();
-        println!("{:?}", to_json);
-    }
-
-    None
-}
-#[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_extract_and_parse_resource_name() {
         let input1 = "${resource.property}".to_string();
@@ -550,32 +340,6 @@ mod tests {
         });
         let output = extract_and_parse_resource_name(input2);
         assert_eq!(expected, output);
-    }
-
-    #[test]
-    fn test_deserialize_yaml() {
-        let wrong_format = r#"
-        resources:
-             containerapp:
-            type: azure-native:app:ContainerApp
-            properties:
-              configuration:
-                ingress:
-                  external: true
-                  targetPort: 80
-                dapr:
-                  appPort: 8000
-                  enabled: true
-                  appId: myapp
-              template:
-                containers:
-                  - image: ${myImage.name}
-                    name: myapp
-        "#;
-
-        let output = deserialize_yaml(wrong_format);
-
-        assert_eq!(None, output);
     }
 
     #[test]
@@ -1010,5 +774,31 @@ mod tests {
         }];
 
         assert_eq!(expected, output)
+    }
+
+    #[test]
+    fn test_deserialize_yaml() {
+        let wrong_format = r#"
+      resources:
+           containerapp:
+          type: azure-native:app:ContainerApp
+          properties:
+            configuration:
+              ingress:
+                external: true
+                targetPort: 80
+              dapr:
+                appPort: 8000
+                enabled: true
+                appId: myapp
+            template:
+              containers:
+                - image: ${myImage.name}
+                  name: myapp
+      "#;
+
+        let output = deserialize(wrong_format);
+
+        assert_eq!(None, output);
     }
 }
