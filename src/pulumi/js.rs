@@ -31,6 +31,42 @@ struct Container {
     configuration: Configuration,
 }
 
+fn parse_line(line: &str) -> String {
+    let a = line.replace(" ", "");
+    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`$"\{}\[\]]+)?"####).unwrap();
+
+    // println!("{a}");
+    let captures = re.captures(&a);
+    let computed = match captures {
+        Some(c) => {
+            let key = c.get(1).unwrap().as_str();
+            let value = if c.get(3).is_some() {
+                let computed = c.get(3).unwrap().as_str();
+                let with_quotes = format!("\"{}\",", computed);
+                let tokens = ["{", "[{"];
+                let has_token = tokens.contains(&computed);
+
+                if has_token {
+                    computed.to_string()
+                } else {
+                    with_quotes
+                }
+            } else {
+                "".to_string()
+            };
+
+            let key = format!("\"{}\"", key).replace("\"\"", "\"");
+            let value = value.replace("\"\"", "\"");
+
+            let computed = format!("{key}:{value}");
+
+            computed
+        }
+        None => a.to_string(),
+    };
+    computed
+}
+
 pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let images_services: Vec<(String, String)> =
         Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
@@ -38,50 +74,19 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
             .captures_iter(&input)
             .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
             .collect();
+
     for (_image_name, image) in images_services {
         let mut s = String::from("");
 
         for line in image.trim().lines() {
-            let a = line.replace(" ", "");
-            let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`$"\{}\[\]]+)?"####).unwrap();
-
-            // println!("{a}");
-            let captures = re.captures(&a);
-            let computed = match captures {
-                Some(c) => {
-                    let key = c.get(1).unwrap().as_str();
-                    let value = if c.get(3).is_some() {
-                        let computed = c.get(3).unwrap().as_str();
-                        let with_quotes = format!("\"{}\",", computed);
-                        let tokens = ["{", "[{"];
-                        let has_token = tokens.contains(&computed);
-
-                        if has_token {
-                            computed.to_string()
-                        } else {
-                            with_quotes
-                        }
-                    } else {
-                        "".to_string()
-                    };
-
-                    let key = format!("\"{}\"", key).replace("\"\"", "\"");
-                    let value = value.replace("\"\"", "\"");
-
-                    let computed = format!("{key}:{value}");
-
-                    computed
-                }
-                None => a.to_string(),
-            };
-
-            s.push_str(&computed)
+            let parsed_line = parse_line(line);
+            s.push_str(&parsed_line);
         }
 
         s = s.replace("})", "}").replace(",}", "}");
 
         let to_json: Image = serde_json::from_str(&s).unwrap();
-        println!("{:?}", to_json)
+        println!("{:?}", to_json);
     }
 
     let container_app_services: Vec<(String, String)> = Regex::new(
@@ -95,39 +100,8 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         let mut s = String::from("");
 
         for line in container.trim().lines() {
-            let a = line.replace(" ", "");
-            let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9"\{}\[\]]+)?"####).unwrap();
-
-            let captures = re.captures(&a);
-            let computed = match captures {
-                Some(c) => {
-                    let key = c.get(1).unwrap().as_str();
-                    let value = if c.get(3).is_some() {
-                        let computed = c.get(3).unwrap().as_str();
-                        let with_quotes = format!("\"{}\",", computed);
-                        let tokens = ["{", "[{"];
-                        let has_token = tokens.contains(&computed);
-
-                        if has_token {
-                            computed.to_string()
-                        } else {
-                            with_quotes
-                        }
-                    } else {
-                        "".to_string()
-                    };
-
-                    let key = format!("\"{}\"", key).replace("\"\"", "\"");
-                    let value = value.replace("\"\"", "\"");
-
-                    let computed = format!("{key}:{value}");
-
-                    computed
-                }
-                None => a.to_string(),
-            };
-
-            s.push_str(&computed)
+            let parsed_line = parse_line(line);
+            s.push_str(&parsed_line);
         }
 
         s = s.replace("})", "}").replace(",}", "}");
