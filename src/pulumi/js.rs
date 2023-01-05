@@ -79,6 +79,7 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         let mut s = String::from("");
 
         for line in image.trim().lines() {
+            println!("{line}");
             let parsed_line = parse_line(line);
             s.push_str(&parsed_line);
         }
@@ -86,7 +87,8 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         s = s.replace("})", "}").replace(",}", "}");
 
         let to_json: Image = serde_json::from_str(&s).unwrap();
-        println!("{:?}", to_json);
+        let to_yaml = serde_yaml::to_value(to_json);
+        println!("{:?}", to_yaml);
     }
 
     let container_app_services: Vec<(String, String)> = Regex::new(
@@ -96,6 +98,7 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     .captures_iter(&input)
     .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
     .collect();
+
     for (_container_name, container) in container_app_services {
         let mut s = String::from("");
 
@@ -107,7 +110,8 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         s = s.replace("})", "}").replace(",}", "}");
 
         let to_json: Container = serde_json::from_str(&s).unwrap();
-        println!("{:?}", to_json);
+        let to_yaml = serde_yaml::to_value(to_json);
+        println!("{:?}", to_yaml);
     }
 
     None
