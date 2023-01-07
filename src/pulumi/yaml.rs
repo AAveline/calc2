@@ -1,6 +1,6 @@
 use log::error;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use crate::serializer::{BuildContext, ContainerAppConfiguration};
@@ -19,10 +19,10 @@ pub struct DockerImageForPulumi {
 }
 
 #[derive(Debug)]
-pub struct AppConfiguration<'a> {
-    pub container: &'a Value,
-    pub dapr_configuration: Option<&'a Value>,
-    pub ingress_configuration: Option<&'a Value>,
+pub struct AppConfiguration {
+    pub container: ContainerBluePrint,
+    pub dapr_configuration: Option<DaprBluePrint>,
+    pub ingress_configuration: Option<IngressBluePrint>,
 }
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
@@ -42,80 +42,56 @@ fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
     }
 }
 
-fn check_and_match_reference(resources: &Value, reference: &str) -> Option<DockerImageForPulumi> {
-    let val = resources.get(reference);
+fn check_and_match_reference(
+    images: &Vec<ContainerImageBluePrint>,
+    reference: &str,
+) -> Option<DockerImageForPulumi> {
+    let val = images
+        .iter()
+        .find(|image| image.referenceName.clone().unwrap() == reference);
     let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
 
     match val {
         Some(val) => {
-            let has_build_context = val
-                .get("properties".to_string())
-                // Assert that properties is always defined ? TODO - Rework on it
-                .unwrap()
-                .get("build".to_string());
-            if has_build_context.is_some() {
-                let a = re
-                    .captures(
-                        has_build_context
-                            .unwrap()
-                            .get("context".to_string())
-                            .unwrap()
-                            .as_str()
-                            .unwrap(),
-                    )
-                    .unwrap();
+            let has_build_context = &val.build;
 
-                let image_name = a.get(3).map_or("", |m| m.as_str());
-                let context_path = a.get(1).map_or("", |m| m.as_str());
+            let a = re.captures(&has_build_context.context).unwrap();
 
-                if image_name.is_empty() | context_path.is_empty() {
-                    return None;
-                }
+            let image_name = a.get(3).map_or("", |m| m.as_str());
+            let context_path = a.get(1).map_or("", |m| m.as_str());
 
-                Some(DockerImageForPulumi {
-                    name: None,
-                    path: Some(format!(
-                        "{}/{}",
-                        context_path.replace("${pulumi.cwd}", "."),
-                        image_name
-                    )),
-                    is_context: true,
-                })
-            } else {
-                Some(DockerImageForPulumi {
-                    name: Some(reference.to_string()),
-                    path: None,
-                    is_context: false,
-                })
+            if image_name.is_empty() | context_path.is_empty() {
+                return None;
             }
+
+            Some(DockerImageForPulumi {
+                name: None,
+                path: Some(format!(
+                    "{}/{}",
+                    context_path.replace("${pulumi.cwd}", "."),
+                    image_name
+                )),
+                is_context: true,
+            })
         }
         None => None,
     }
 }
 
-fn build_image_for_serialization(resources: &Value, container: &Value) -> DockerImageForPulumi {
-    let image = match container.get("image") {
-        Some(name) => {
-            let resource =
-                extract_and_parse_resource_name(name.as_str().unwrap_or_default().to_string())
-                    .expect("Should contains name property");
+fn build_image_for_serialization(
+    images: &Vec<ContainerImageBluePrint>,
+    container: ContainerBluePrint,
+) -> DockerImageForPulumi {
+    let resource =
+        extract_and_parse_resource_name(container.name).expect("Should contains name property");
 
-            // Need to check if it's a reference or not
-            let image = match check_and_match_reference(resources, &resource.name) {
-                Some(v) => v,
-                None => DockerImageForPulumi {
-                    name: Some(resource.name),
-                    is_context: false,
-                    path: None,
-                },
-            };
-
-            image
-        }
+    // Need to check if it's a reference or not
+    let image = match check_and_match_reference(images, &resource.name) {
+        Some(v) => v,
         None => DockerImageForPulumi {
-            name: None,
-            path: None,
+            name: Some(resource.name),
             is_context: false,
+            path: None,
         },
     };
 
@@ -124,56 +100,49 @@ fn build_image_for_serialization(resources: &Value, container: &Value) -> Docker
 
 fn build_ports_mapping_for_serialization(
     configuration: AppConfiguration,
-) -> (&Value, Option<Vec<String>>) {
+) -> (Option<u32>, Option<Vec<String>>) {
     let dapr_configuration = configuration.dapr_configuration;
     let ingress_configuration = configuration.ingress_configuration;
-    let container_name = configuration.container.get("name");
+    let container_name = configuration.container.name;
 
-    let has_dapr_enabled = dapr_configuration
-        .unwrap_or(&Value::Null)
-        .get("enabled".to_string())
-        .unwrap_or(&Value::Null);
+    let has_dapr_enabled = dapr_configuration.is_some();
+    let has_ingress_exposed = ingress_configuration.is_some();
 
-    let has_ingress_exposed = ingress_configuration
-        .unwrap_or(&Value::Null)
-        .get("external".to_string())
-        .unwrap_or(&Value::Null);
+    let dapr_app_port = match dapr_configuration.clone() {
+        Some(val) => val.appPort,
+        None => None,
+    };
 
-    let dapr_app_port = dapr_configuration
-        .unwrap_or(&Value::Null)
-        .get("appPort")
-        .unwrap_or(&Value::Null);
+    let dapr_app_id = match dapr_configuration.clone() {
+        Some(val) => val.appId,
+        None => None,
+    };
 
-    let ingress_app_port = ingress_configuration
-        .unwrap_or(&Value::Null)
-        .get("targetPort")
-        .unwrap_or(&Value::Null);
+    let ingress_app_port = match ingress_configuration {
+        Some(val) => val.targetPort,
+        None => None,
+    };
 
     let mut ports: Vec<String> = vec![];
     // TODO: Assert for now than source and target ports are sames (container name and dapr target)
 
-    if has_dapr_enabled.as_bool() == Some(true) && has_ingress_exposed.as_bool() == Some(true) {
-        let has_right_target = container_name
-            == dapr_configuration
-                .unwrap_or(&Value::Null)
-                .get("appId".to_string());
+    if has_dapr_enabled && has_ingress_exposed {
+        let has_right_target = container_name == dapr_app_id.unwrap_or_default();
 
         if has_right_target {
             ports.push(format!(
                 "{}:{}",
-                ingress_app_port.as_f64().unwrap_or_default().to_string(),
-                dapr_app_port.as_f64().unwrap_or_default().to_string()
+                ingress_app_port.unwrap_or_default().to_string(),
+                dapr_app_port.unwrap_or_default().to_string()
             ))
         }
     }
 
-    if (has_dapr_enabled.as_bool() == Some(false) || has_dapr_enabled.is_null())
-        && has_ingress_exposed.as_bool() == Some(true)
-    {
+    if (!has_dapr_enabled) && has_ingress_exposed {
         ports.push(format!(
             "{}:{}",
-            ingress_app_port.as_f64().unwrap_or_default().to_string(),
-            ingress_app_port.as_f64().unwrap_or_default().to_string()
+            ingress_app_port.unwrap_or_default().to_string(),
+            ingress_app_port.unwrap_or_default().to_string()
         ))
     }
 
@@ -184,27 +153,22 @@ fn build_ports_mapping_for_serialization(
 }
 
 fn parse_app_configuration(
-    resources: &Value,
+    images: &Vec<ContainerImageBluePrint>,
     configuration: AppConfiguration,
 ) -> Vec<ContainerAppConfiguration> {
-    let container = configuration.container;
-    let dapr_configuration = configuration.dapr_configuration;
+    let container = configuration.container.clone();
+    let dapr_configuration = configuration.dapr_configuration.clone();
 
-    let image = build_image_for_serialization(resources, container);
-    let name = container
-        .get("name")
-        .unwrap()
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
+    let image = build_image_for_serialization(images, container);
+    let name = configuration.container.name.clone();
     let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
 
-    let has_dapr_enabled = dapr_configuration
-        .unwrap_or(&Value::Null)
-        .get("enabled".to_string())
-        .unwrap_or(&Value::Null);
+    let has_dapr_enabled = match dapr_configuration {
+        Some(v) => v.enabled.unwrap(),
+        None => false,
+    };
 
-    if has_dapr_enabled.as_bool() == Some(true) {
+    if has_dapr_enabled {
         vec![
             ContainerAppConfiguration {
                 image: image.name,
@@ -235,7 +199,7 @@ fn parse_app_configuration(
                     "-app-id".to_string(),
                     String::from(&name),
                     "-app-port".to_string(),
-                    format!("{}", dapr_app_port.as_f64().unwrap_or_default().to_string()),
+                    format!("{}", dapr_app_port.unwrap_or_default()),
                     "-placement-host-address".to_string(),
                     "placement:50006".to_string(),
                     "air".to_string(),
@@ -260,6 +224,49 @@ fn parse_app_configuration(
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DaprBluePrint {
+    appPort: Option<u32>,
+    enabled: Option<bool>,
+    appId: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IngressBluePrint {
+    external: Option<bool>,
+    targetPort: Option<u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConfigurationBluePrint {
+    ingress: Option<IngressBluePrint>,
+    dapr: Option<DaprBluePrint>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TemplateBluePrint {
+    containers: Option<Vec<ContainerBluePrint>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContainerBluePrint {
+    image: String,
+    name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct ContainerAppBluePrint {
+    configuration: ConfigurationBluePrint,
+    template: TemplateBluePrint,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct BuildContextBluePrint {
+    context: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct ContainerImageBluePrint {
+    name: String,
+    build: BuildContextBluePrint,
+    referenceName: Option<String>,
+}
+
 pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
     let deserialized_map = serde_yaml::Deserializer::from_str(input);
     let value = Value::deserialize(deserialized_map);
@@ -277,32 +284,53 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
                     None => false,
                 }
             }
-            let container_apps = as_mapping
+
+            let images: Vec<ContainerImageBluePrint> = as_mapping
+                .keys()
+                .map(|key| match as_mapping.get(key) {
+                    Some(resource) => {
+                        if filter_by_type(&resource, "docker:RegistryImage") {
+                            let mut image: ContainerImageBluePrint = serde_yaml::from_value(
+                                resource.get("properties").unwrap().to_owned(),
+                            )
+                            .unwrap();
+                            image.referenceName = Some(key.as_str().unwrap().to_string());
+
+                            Some(image)
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                })
+                .flatten()
+                .collect();
+
+            let apps: Vec<ContainerAppBluePrint> = as_mapping
                 .values()
-                .filter(|x| filter_by_type(x, "azure-native:app:ContainerApp"));
+                .filter(|x| filter_by_type(x, "azure-native:app:ContainerApp"))
+                .map(|container| {
+                    serde_yaml::from_value(container.get("properties").unwrap().to_owned()).unwrap()
+                })
+                .collect();
 
             let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
-            for app in container_apps {
-                let containers = app
-                    .get("properties")?
-                    .get("template")?
-                    .get("containers")?
-                    .as_sequence()?;
-
-                let dapr_configuration = app.get("properties")?.get("configuration")?.get("dapr");
-                let ingress_configuration =
-                    app.get("properties")?.get("configuration")?.get("ingress");
+            for app in apps {
+                let containers = app.template.containers;
+                let dapr_configuration = app.configuration.dapr;
+                let ingress_configuration = app.configuration.ingress;
 
                 let mut a: Vec<ContainerAppConfiguration> = containers
+                    .unwrap()
                     .iter()
                     .flat_map(|container| {
                         parse_app_configuration(
-                            resources,
+                            &images,
                             AppConfiguration {
-                                container,
-                                dapr_configuration,
-                                ingress_configuration,
+                                container: container.to_owned(),
+                                dapr_configuration: dapr_configuration.clone(),
+                                ingress_configuration: ingress_configuration.clone(),
                             },
                         )
                     })

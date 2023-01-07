@@ -5,10 +5,9 @@ services:
     - placement
     networks:
     - dapr-network
+    image: myapp
     ports:
     - 80:8000
-    build:
-      context: ./node-app
   myapp_dapr:
     depends_on:
     - myapp
@@ -24,14 +23,13 @@ services:
     - air
     network_mode: service:myapp
   myappbis:
-    image: node:12
+    image: myappbis
     ports:
     - 80:80
   some-app:
+    image: some-app
     ports:
     - 3000:3000
-    build:
-      context: ./node-app
   placement:
     networks:
     - dapr-network
