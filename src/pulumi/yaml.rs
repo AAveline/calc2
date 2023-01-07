@@ -83,7 +83,7 @@ fn build_image_for_serialization(
     container: ContainerBluePrint,
 ) -> DockerImageForPulumi {
     let resource =
-        extract_and_parse_resource_name(container.name).expect("Should contains name property");
+        extract_and_parse_resource_name(container.image).expect("Should contains name property");
 
     // Need to check if it's a reference or not
     let image = match check_and_match_reference(images, &resource.name) {
