@@ -36,7 +36,7 @@ fn get_images(mapping: &Mapping) -> Vec<ContainerImageBluePrint> {
                     let mut image: ContainerImageBluePrint =
                         serde_yaml::from_value(resource.get("properties").unwrap().to_owned())
                             .unwrap();
-                    image.referenceName = Some(key.as_str().unwrap().to_string());
+                    image.reference_name = Some(key.as_str().unwrap().to_string());
 
                     Some(image)
                 } else {
@@ -129,7 +129,7 @@ mod tests {
         let output = get_images(as_mapping);
 
         let expected = vec![ContainerImageBluePrint {
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
             name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
@@ -190,11 +190,11 @@ mod tests {
             configuration: ConfigurationBluePrint {
                 ingress: Some(IngressBluePrint {
                     external: Some(true),
-                    targetPort: Some(80),
+                    target_port: Some(80),
                 }),
                 dapr: Some(DaprBluePrint {
-                    appId: Some("myapp".to_string()),
-                    appPort: Some(3000),
+                    app_id: Some("myapp".to_string()),
+                    app_port: Some(3000),
                     enabled: Some(true),
                 }),
             },
@@ -219,11 +219,11 @@ mod tests {
                 configuration:
                   ingress:
                     external: true
-                    targetPort: 80
+                    target_port: 80
                   dapr:
-                    appPort: 8000
+                    app_port: 8000
                     enabled: true
-                    appId: myapp
+                    app_id: myapp
                 template:
                   containers:
                     - image: ${myImage.name}

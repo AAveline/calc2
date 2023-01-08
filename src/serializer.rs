@@ -17,15 +17,17 @@ pub struct BuildContext {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct DaprBluePrint {
-    pub appPort: Option<u32>,
+    pub app_port: Option<u32>,
     pub enabled: Option<bool>,
-    pub appId: Option<String>,
+    pub app_id: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct IngressBluePrint {
     pub external: Option<bool>,
-    pub targetPort: Option<u32>,
+    pub target_port: Option<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConfigurationBluePrint {
@@ -56,7 +58,7 @@ pub struct BuildContextBluePrint {
 pub struct ContainerImageBluePrint {
     pub name: String,
     pub build: BuildContextBluePrint,
-    pub referenceName: Option<String>,
+    pub reference_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

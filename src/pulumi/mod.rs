@@ -102,7 +102,7 @@ fn check_and_match_reference(
     let name = resource.name;
     let val = images
         .iter()
-        .find(|image| image.referenceName.clone().unwrap() == name);
+        .find(|image| image.reference_name.clone().unwrap() == name);
     let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
 
     match val {
@@ -170,17 +170,17 @@ fn build_ports_mapping_for_serialization(
     };
 
     let dapr_app_port = match dapr_configuration.clone() {
-        Some(val) => val.appPort,
+        Some(val) => val.app_port,
         None => None,
     };
 
     let dapr_app_id = match dapr_configuration.clone() {
-        Some(val) => val.appId,
+        Some(val) => val.app_id,
         None => None,
     };
 
     let ingress_app_port = match ingress_configuration {
-        Some(val) => val.targetPort,
+        Some(val) => val.target_port,
         None => None,
     };
 
@@ -356,7 +356,7 @@ mod tests {
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
         }];
 
         let output = build_image_for_serialization(&images, container).unwrap();
@@ -379,7 +379,7 @@ mod tests {
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
         }];
 
         let output = build_image_for_serialization(&images, container);
@@ -396,7 +396,7 @@ mod tests {
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
         }];
 
         let output = build_image_for_serialization(&images, container).unwrap();
@@ -439,9 +439,9 @@ mod tests {
         };
 
         let dapr_configuration = Some(DaprBluePrint {
-            appPort: Some(80),
+            app_port: Some(80),
             enabled: Some(false),
-            appId: Some("t".to_string()),
+            app_id: Some("t".to_string()),
         });
         let ingress_configuration = None;
 
@@ -464,9 +464,9 @@ mod tests {
         };
 
         let dapr_configuration = Some(DaprBluePrint {
-            appPort: Some(80),
+            app_port: Some(80),
             enabled: Some(true),
-            appId: Some("t".to_string()),
+            app_id: Some("t".to_string()),
         });
         let ingress_configuration = None;
 
@@ -481,20 +481,20 @@ mod tests {
         assert_eq!(dapr_app_port, Some(80));
         assert_eq!(ports, None);
 
-        // Assert that dapr.enabled:true with ingress generate None ports if appId doesn't match with existing container
+        // Assert that dapr.enabled:true with ingress generate None ports if app_id doesn't match with existing container
         let container = ContainerBluePrint {
             image: "${myImage.name}".to_string(),
             name: "t".to_string(),
         };
 
         let dapr_configuration = Some(DaprBluePrint {
-            appPort: Some(80),
+            app_port: Some(80),
             enabled: Some(true),
-            appId: Some("some-app".to_string()),
+            app_id: Some("some-app".to_string()),
         });
         let ingress_configuration = Some(IngressBluePrint {
             external: Some(true),
-            targetPort: Some(3000),
+            target_port: Some(3000),
         });
 
         let configuration = AppConfiguration {
@@ -508,20 +508,20 @@ mod tests {
         assert_eq!(dapr_app_port, Some(80));
         assert_eq!(ports, None);
 
-        // Assert that dapr.enabled:true with ingress generate ports if appId match with existing container
+        // Assert that dapr.enabled:true with ingress generate ports if app_id match with existing container
         let container = ContainerBluePrint {
             image: "${myImage.name}".to_string(),
             name: "some-app".to_string(),
         };
 
         let dapr_configuration = Some(DaprBluePrint {
-            appPort: Some(80),
+            app_port: Some(80),
             enabled: Some(true),
-            appId: Some("some-app".to_string()),
+            app_id: Some("some-app".to_string()),
         });
         let ingress_configuration = Some(IngressBluePrint {
             external: Some(true),
-            targetPort: Some(3000),
+            target_port: Some(3000),
         });
 
         let configuration = AppConfiguration {
@@ -542,13 +542,13 @@ mod tests {
         };
 
         let dapr_configuration = Some(DaprBluePrint {
-            appPort: Some(80),
+            app_port: Some(80),
             enabled: Some(false),
-            appId: Some("t".to_string()),
+            app_id: Some("t".to_string()),
         });
         let ingress_configuration = Some(IngressBluePrint {
             external: Some(true),
-            targetPort: Some(3000),
+            target_port: Some(3000),
         });
 
         let configuration = AppConfiguration {
@@ -571,13 +571,13 @@ mod tests {
                 name: "myapp".to_string(),
             },
             dapr_configuration: Some(DaprBluePrint {
-                appPort: Some(3000),
+                app_port: Some(3000),
                 enabled: Some(true),
-                appId: Some("myapp".to_string()),
+                app_id: Some("myapp".to_string()),
             }),
             ingress_configuration: Some(IngressBluePrint {
                 external: Some(true),
-                targetPort: Some(80),
+                target_port: Some(80),
             }),
         };
 
@@ -586,7 +586,7 @@ mod tests {
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
         }];
 
         let output = parse_app_configuration(&images, configuration);
@@ -635,13 +635,13 @@ mod tests {
                 name: "myapp".to_string(),
             },
             dapr_configuration: Some(DaprBluePrint {
-                appPort: Some(3000),
+                app_port: Some(3000),
                 enabled: Some(false),
-                appId: Some("myapp".to_string()),
+                app_id: Some("myapp".to_string()),
             }),
             ingress_configuration: Some(IngressBluePrint {
                 external: Some(false),
-                targetPort: Some(80),
+                target_port: Some(80),
             }),
         };
 
