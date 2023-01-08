@@ -26,25 +26,26 @@ impl Pulumi {
 
 impl Serializer for Pulumi {
     type Output = Pulumi;
-    fn deserialize_value(&mut self, input: &str) -> Option<&Self> {
+    fn deserialize_value(&mut self, input: &str) -> Result<&Self, String> {
         match self.language {
             Language::Yaml => match yaml::deserialize(input) {
-                Some(value) => {
+                Ok(value) => {
                     self.resources = Some(value);
-                    Some(self)
+                    Ok(self)
                 }
-                None => None,
+                Err(err) => Err(err),
             },
             Language::Typescript | Language::Javascript => match js::deserialize(input) {
-                Some(value) => {
+                Ok(value) => {
                     self.resources = Some(value);
-                    Some(self)
+                    Ok(self)
                 }
-                None => None,
+                Err(err) => Err(err),
             },
             _ => {
                 error!("Language not supported");
-                None
+                // TODO: Refacto this
+                Err("An error occured".to_string())
             }
         }
     }

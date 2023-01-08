@@ -67,7 +67,7 @@ fn parse_line(line: &str) -> String {
     computed
 }
 
-pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
+pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String> {
     let images_services: Vec<(String, String)> =
         Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
             .unwrap()
@@ -114,5 +114,6 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         println!("{:?}", to_yaml);
     }
 
-    None
+    // TODO: Refacto this
+    Err("An error occured".to_string())
 }

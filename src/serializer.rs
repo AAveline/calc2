@@ -82,7 +82,7 @@ pub struct ContainerAppConfiguration {
 }
 pub trait Serializer {
     type Output;
-    fn deserialize_value(&mut self, input: &str) -> Option<&Self::Output>;
+    fn deserialize_value(&mut self, input: &str) -> Result<&Self::Output, String>;
     fn serialize_value(
         &self,
         services: &Vec<ContainerAppConfiguration>,
@@ -164,8 +164,8 @@ mod tests {
 
     impl Serializer for TestSerializer {
         type Output = TestSerializer;
-        fn deserialize_value(&mut self, _input: &str) -> Option<&Self> {
-            Some(self)
+        fn deserialize_value(&mut self, _input: &str) -> Result<&Self, String> {
+            Ok(self)
         }
     }
 
