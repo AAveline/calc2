@@ -15,6 +15,50 @@ pub enum Language {
 pub struct BuildContext {
     pub context: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DaprBluePrint {
+    pub appPort: Option<u32>,
+    pub enabled: Option<bool>,
+    pub appId: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IngressBluePrint {
+    pub external: Option<bool>,
+    pub targetPort: Option<u32>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConfigurationBluePrint {
+    pub ingress: Option<IngressBluePrint>,
+    pub dapr: Option<DaprBluePrint>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TemplateBluePrint {
+    pub containers: Option<Vec<ContainerBluePrint>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContainerBluePrint {
+    pub image: String,
+    pub name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContainerAppBluePrint {
+    pub configuration: ConfigurationBluePrint,
+    pub template: TemplateBluePrint,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BuildContextBluePrint {
+    pub context: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContainerImageBluePrint {
+    pub name: String,
+    pub build: BuildContextBluePrint,
+    pub referenceName: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContainerAppConfiguration {
     #[serde(skip_serializing)]

@@ -24,7 +24,7 @@ services:
     - air
     network_mode: service:myapp
   myappbis:
-    image: node:12
+    image: ${node:12
     ports:
     - 80:80
   some-app:
