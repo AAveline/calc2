@@ -56,7 +56,7 @@ pub struct BuildContextBluePrint {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContainerImageBluePrint {
-    pub name: String,
+    pub name: Option<String>,
     pub build: BuildContextBluePrint,
     pub reference_name: Option<String>,
 }

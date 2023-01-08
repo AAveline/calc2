@@ -1,0 +1,76 @@
+version: '3.9'
+services:
+  remix:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    image: remixImage.imageName
+    ports:
+    - 8000:8000
+  remix_dapr:
+    depends_on:
+    - remix
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - remix
+    - -app-port
+    - '8000'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:remix
+  service:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    image: service1Image.imageName
+  service_dapr:
+    depends_on:
+    - service
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - service
+    - -app-port
+    - '3000'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:service
+  service2:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    image: service2Image.imageName
+  service2_dapr:
+    depends_on:
+    - service2
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - service2
+    - -app-port
+    - '3001'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:service2
+  placement:
+    networks:
+    - dapr-network
+    image: daprio/dapr
+    ports:
+    - 50006:50006
+    command:
+    - ./placement
+    - -port
+    - '50006'
+networks:
+  dapr-network: {}

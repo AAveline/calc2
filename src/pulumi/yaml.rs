@@ -130,7 +130,7 @@ mod tests {
 
         let expected = vec![ContainerImageBluePrint {
             reference_name: Some("myImage".to_string()),
-            name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
+            name: Some("${registry.loginServer}/node-app:v1.0.0".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },

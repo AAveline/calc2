@@ -352,7 +352,7 @@ mod tests {
             name: "myapp".to_string(),
         };
         let images = vec![ContainerImageBluePrint {
-            name: "myImage".to_string(),
+            name: Some("myImage".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
@@ -375,7 +375,7 @@ mod tests {
             name: "myapp".to_string(),
         };
         let images = vec![ContainerImageBluePrint {
-            name: "myImage".to_string(),
+            name: Some("myImage".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
@@ -392,7 +392,7 @@ mod tests {
             name: "myapp".to_string(),
         };
         let images = vec![ContainerImageBluePrint {
-            name: "myImage".to_string(),
+            name: Some("myImage".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
@@ -582,7 +582,7 @@ mod tests {
         };
 
         let images = vec![ContainerImageBluePrint {
-            name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
+            name: Some("${registry.loginServer}/node-app:v1.0.0".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
@@ -646,11 +646,11 @@ mod tests {
         };
 
         let images = vec![ContainerImageBluePrint {
-            name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
+            name: Some("${registry.loginServer}/node-app:v1.0.0".to_string()),
             build: BuildContextBluePrint {
                 context: "${pulumi.cwd}/node-app".to_string(),
             },
-            referenceName: Some("myImage".to_string()),
+            reference_name: Some("myImage".to_string()),
         }];
 
         let output = parse_app_configuration(&images, configuration);

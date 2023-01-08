@@ -5,11 +5,8 @@ import * as app from "@pulumi/azure-native/app";
 
 import {
     resourceGroup,
-    workspace,
-    workspaceSharedKeys,
     managedEnv,
     registry,
-    credentials,
     adminPassword,
     adminUsername
 } from "./default";
