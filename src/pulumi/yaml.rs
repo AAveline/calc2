@@ -78,3 +78,35 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
         }
     }
 }
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize() {
+        /*
+            let wrong_format = r#"
+          resources:
+               containerapp:
+              type: azure-native:app:ContainerApp
+              properties:
+                configuration:
+                  ingress:
+                    external: true
+                    targetPort: 80
+                  dapr:
+                    appPort: 8000
+                    enabled: true
+                    appId: myapp
+                template:
+                  containers:
+                    - image: ${myImage.name}
+                      name: myapp
+          "#;
+
+            let output = deserialize(wrong_format);
+
+            assert_eq!(None, output);
+        }*/
+    }
+}

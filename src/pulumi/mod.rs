@@ -158,8 +158,15 @@ fn build_ports_mapping_for_serialization(
     let ingress_configuration = configuration.ingress_configuration;
     let container_name = configuration.container.name;
 
-    let has_dapr_enabled = dapr_configuration.is_some();
-    let has_ingress_exposed = ingress_configuration.is_some();
+    let has_dapr_enabled = match &dapr_configuration {
+        Some(v) => v.enabled.is_some() && v.enabled.unwrap() == true,
+        None => false,
+    };
+
+    let has_ingress_exposed = match &ingress_configuration {
+        Some(v) => v.external.is_some() && v.external.unwrap() == true,
+        None => false,
+    };
 
     let dapr_app_port = match dapr_configuration.clone() {
         Some(val) => val.appPort,
@@ -312,7 +319,7 @@ pub fn build_configuration(
 }
 
 mod tests {
-    use crate::serializer::BuildContextBluePrint;
+    use crate::serializer::{BuildContextBluePrint, ConfigurationBluePrint, TemplateBluePrint};
 
     use super::*;
     #[test]
@@ -401,35 +408,17 @@ mod tests {
 
         assert_eq!(expected, output);
     }
-    /*
+
     #[test]
     fn test_build_ports_mapping_for_serialization() {
-        let input_without_dapr = r#"
-      configuration:
-        ingress:
-          external: false
-          targetPort: 3000
-        dapr:
-          appPort: 3000
-          enabled: false
-          appId: some-app
-      template:
-        containers:
-          - image: ${myImage.name}
-            name: some-app
-      "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_without_dapr);
-        let value = Value::deserialize(deserialized_map).unwrap();
+        // Assert that None dapr and ingress generate None ports
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "some-app".to_string(),
+        };
 
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
+        let dapr_configuration = None;
+        let ingress_configuration = None;
 
         let configuration = AppConfiguration {
             container,
@@ -439,35 +428,21 @@ mod tests {
 
         let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
 
-        assert_eq!(dapr_app_port, &Value::from(3000));
+        assert_eq!(dapr_app_port, None);
         assert_eq!(ports, None);
 
-        let input_with_ingress = r#"
-        configuration:
-          ingress:
-            external: true
-            targetPort: 3000
-          dapr:
-            appPort: 3000
-            enabled: false
-            appId: some-app
-        template:
-          containers:
-            - image: ${myImage.name}
-              name: some-app
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_with_ingress);
-        let value = Value::deserialize(deserialized_map).unwrap();
+        // Assert that dapr.enabled:false generate None ports
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "some-app".to_string(),
+        };
 
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
+        let dapr_configuration = Some(DaprBluePrint {
+            appPort: Some(80),
+            enabled: Some(false),
+            appId: Some("t".to_string()),
+        });
+        let ingress_configuration = None;
 
         let configuration = AppConfiguration {
             container,
@@ -477,260 +452,266 @@ mod tests {
 
         let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
 
-        assert_eq!(dapr_app_port, &Value::from(3000));
+        assert_eq!(dapr_app_port, Some(80));
+        assert_eq!(ports, None);
+
+        //TODO
+        // Assert that dapr.enabled:true without ingress generate None ports
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "some-app".to_string(),
+        };
+
+        let dapr_configuration = Some(DaprBluePrint {
+            appPort: Some(80),
+            enabled: Some(true),
+            appId: Some("t".to_string()),
+        });
+        let ingress_configuration = None;
+
+        let configuration = AppConfiguration {
+            container,
+            dapr_configuration,
+            ingress_configuration,
+        };
+
+        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
+
+        assert_eq!(dapr_app_port, Some(80));
+        assert_eq!(ports, None);
+
+        // Assert that dapr.enabled:true with ingress generate None ports if appId doesn't match with existing container
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "t".to_string(),
+        };
+
+        let dapr_configuration = Some(DaprBluePrint {
+            appPort: Some(80),
+            enabled: Some(true),
+            appId: Some("some-app".to_string()),
+        });
+        let ingress_configuration = Some(IngressBluePrint {
+            external: Some(true),
+            targetPort: Some(3000),
+        });
+
+        let configuration = AppConfiguration {
+            container,
+            dapr_configuration,
+            ingress_configuration,
+        };
+
+        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
+
+        assert_eq!(dapr_app_port, Some(80));
+        assert_eq!(ports, None);
+
+        // Assert that dapr.enabled:true with ingress generate ports if appId match with existing container
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "some-app".to_string(),
+        };
+
+        let dapr_configuration = Some(DaprBluePrint {
+            appPort: Some(80),
+            enabled: Some(true),
+            appId: Some("some-app".to_string()),
+        });
+        let ingress_configuration = Some(IngressBluePrint {
+            external: Some(true),
+            targetPort: Some(3000),
+        });
+
+        let configuration = AppConfiguration {
+            container,
+            dapr_configuration,
+            ingress_configuration,
+        };
+
+        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
+
+        assert_eq!(dapr_app_port, Some(80));
+        assert_eq!(ports, Some(vec!["3000:80".to_string()]));
+
+        // Assert that dapr.enabled:false with ingress.enabled:true  generate  Ingress ports
+        let container = ContainerBluePrint {
+            image: "${myImage.name}".to_string(),
+            name: "some-app".to_string(),
+        };
+
+        let dapr_configuration = Some(DaprBluePrint {
+            appPort: Some(80),
+            enabled: Some(false),
+            appId: Some("t".to_string()),
+        });
+        let ingress_configuration = Some(IngressBluePrint {
+            external: Some(true),
+            targetPort: Some(3000),
+        });
+
+        let configuration = AppConfiguration {
+            container,
+            dapr_configuration,
+            ingress_configuration,
+        };
+
+        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
+
+        assert_eq!(dapr_app_port, Some(80));
         assert_eq!(ports, Some(vec!["3000:3000".to_string()]));
-
-        let input_with_dapr = r#"
-        configuration:
-          ingress:
-            external: false
-          dapr:
-            appPort: 3000
-            enabled: true
-            appId: some-app
-        template:
-          containers:
-            - image: ${myImage.name}
-              name: some-app
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_with_dapr);
-        let value = Value::deserialize(deserialized_map).unwrap();
-
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-        let configuration = AppConfiguration {
-            container,
-            dapr_configuration,
-            ingress_configuration,
-        };
-
-        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
-
-        assert_eq!(dapr_app_port, &Value::from(3000));
-        assert_eq!(ports, None);
-
-        let input_with_dapr_and_ingress = r#"
-        configuration:
-          ingress:
-            external: true
-            targetPort: 80
-          dapr:
-            appPort: 3000
-            enabled: true
-            appId: some-app
-        template:
-          containers:
-            - image: ${myImage.name}
-              name: some-app
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_with_dapr_and_ingress);
-        let value = Value::deserialize(deserialized_map).unwrap();
-
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-        let configuration = AppConfiguration {
-            container,
-            dapr_configuration,
-            ingress_configuration,
-        };
-
-        let (dapr_app_port, ports) = build_ports_mapping_for_serialization(configuration);
-
-        assert_eq!(dapr_app_port, &Value::from(3000));
-        assert_eq!(ports, Some(vec!["80:3000".to_string()]));
     }
+    /*
+        #[test]
+        fn test_parse_app_configuration() {
+            let value = r#"
+            resources:
+              myImage:
+                type: docker:RegistryImage
+                properties:
+                  name: ${registry.loginServer}/node-app:v1.0.0
+                  build:
+                    context: ${pulumi.cwd}/node-app
+                options:
+                  provider: ${provider}
+              containerapp:
+                type: azure-native:app:ContainerApp
+                properties:
+                  configuration:
+                    ingress:
+                      external: true
+                      targetPort: 80
+                    dapr:
+                      appPort: 8000
+                      enabled: true
+                      appId: myapp
+                  template:
+                    containers:
+                      - image: ${myImage.name}
+                        name: myapp
+            "#;
+            let deserialized_map = serde_yaml::Deserializer::from_str(value);
+            let resources = Value::deserialize(deserialized_map).unwrap();
 
-    #[test]
-    fn test_parse_app_configuration() {
-        let value = r#"
-        resources:
-          myImage:
-            type: docker:RegistryImage
-            properties:
-              name: ${registry.loginServer}/node-app:v1.0.0
-              build:
-                context: ${pulumi.cwd}/node-app
-            options:
-              provider: ${provider}
-          containerapp:
-            type: azure-native:app:ContainerApp
-            properties:
-              configuration:
-                ingress:
-                  external: true
-                  targetPort: 80
-                dapr:
-                  appPort: 8000
-                  enabled: true
-                  appId: myapp
-              template:
-                containers:
-                  - image: ${myImage.name}
-                    name: myapp
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(value);
-        let resources = Value::deserialize(deserialized_map).unwrap();
-
-        let input_with_dapr = r#"
-        configuration:
-          ingress:
-            external: false
-            targetPort: 3000
-          dapr:
-            appPort: 3000
-            enabled: true
-            appId: myapp
-        template:
-          containers:
-            - image: ${myImage.name}
-              name: myapp
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_with_dapr);
-        let value = Value::deserialize(deserialized_map).unwrap();
-
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-        let configuration = AppConfiguration {
-            container,
-            dapr_configuration,
-            ingress_configuration,
-        };
-
-        let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
-        let expected = vec![
-            ContainerAppConfiguration {
-                image: None,
-                build: Some(BuildContext {
-                    context: "./node-app".to_string(),
-                }),
-                name: "myapp".to_string(),
-                depends_on: Some(vec!["placement".to_string()]),
-                networks: Some(vec![String::from("dapr-network")]),
-                network_mode: None,
-                environment: None,
-                ports: None,
-                command: None,
-            },
-            ContainerAppConfiguration {
-                image: Some(String::from("daprio/daprd:edge")),
-                name: format!("myapp_dapr"),
-                depends_on: Some(vec![String::from("myapp")]),
-                network_mode: Some(format!("service:{}", String::from("myapp"))),
-                environment: None,
-                ports: None,
-                networks: None,
-                build: None,
-                command: Some(vec![
-                    "./daprd".to_string(),
-                    "-app-id".to_string(),
-                    String::from("myapp"),
-                    "-app-port".to_string(),
-                    "3000".to_string(),
-                    "-placement-host-address".to_string(),
-                    "placement:50006".to_string(),
-                    "air".to_string(),
-                ]),
-            },
-        ];
-
-        assert_eq!(expected, output);
-
-        let input_without_dapr = r#"
-        configuration:
-          ingress:
-            external: false
-            targetPort: 3000
-          dapr:
-            appPort: 3000
-            enabled: false
-            appId: myapp
-        template:
-          containers:
-            - image: node-12
-              name: myapp
-        "#;
-        let deserialized_map = serde_yaml::Deserializer::from_str(input_without_dapr);
-        let value = Value::deserialize(deserialized_map).unwrap();
-
-        let container = &value
-            .get("template")
-            .unwrap()
-            .get("containers")
-            .unwrap()
-            .as_sequence()
-            .unwrap()[0];
-        let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-        let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-        let configuration = AppConfiguration {
-            container,
-            dapr_configuration,
-            ingress_configuration,
-        };
-
-        let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
-        let expected = vec![ContainerAppConfiguration {
-            image: Some("node-12".to_string()),
-            build: None,
-            name: "myapp".to_string(),
-            depends_on: None,
-            networks: None,
-            network_mode: None,
-            environment: None,
-            ports: None,
-            command: None,
-        }];
-
-        assert_eq!(expected, output)
-    }
-
-    #[test]
-    fn test_deserialize_yaml() {
-        let wrong_format = r#"
-      resources:
-           containerapp:
-          type: azure-native:app:ContainerApp
-          properties:
+            let input_with_dapr = r#"
             configuration:
               ingress:
-                external: true
-                targetPort: 80
+                external: false
+                targetPort: 3000
               dapr:
-                appPort: 8000
+                appPort: 3000
                 enabled: true
                 appId: myapp
             template:
               containers:
                 - image: ${myImage.name}
                   name: myapp
-      "#;
+            "#;
+            let deserialized_map = serde_yaml::Deserializer::from_str(input_with_dapr);
+            let value = Value::deserialize(deserialized_map).unwrap();
 
-        let output = deserialize(wrong_format);
+            let container = &value
+                .get("template")
+                .unwrap()
+                .get("containers")
+                .unwrap()
+                .as_sequence()
+                .unwrap()[0];
+            let dapr_configuration = value.get("configuration").unwrap().get("dapr");
+            let ingress_configuration = value.get("configuration").unwrap().get("ingress");
 
-        assert_eq!(None, output);
-    }*/
+            let configuration = AppConfiguration {
+                container,
+                dapr_configuration,
+                ingress_configuration,
+            };
+
+            let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
+            let expected = vec![
+                ContainerAppConfiguration {
+                    image: None,
+                    build: Some(BuildContext {
+                        context: "./node-app".to_string(),
+                    }),
+                    name: "myapp".to_string(),
+                    depends_on: Some(vec!["placement".to_string()]),
+                    networks: Some(vec![String::from("dapr-network")]),
+                    network_mode: None,
+                    environment: None,
+                    ports: None,
+                    command: None,
+                },
+                ContainerAppConfiguration {
+                    image: Some(String::from("daprio/daprd:edge")),
+                    name: format!("myapp_dapr"),
+                    depends_on: Some(vec![String::from("myapp")]),
+                    network_mode: Some(format!("service:{}", String::from("myapp"))),
+                    environment: None,
+                    ports: None,
+                    networks: None,
+                    build: None,
+                    command: Some(vec![
+                        "./daprd".to_string(),
+                        "-app-id".to_string(),
+                        String::from("myapp"),
+                        "-app-port".to_string(),
+                        "3000".to_string(),
+                        "-placement-host-address".to_string(),
+                        "placement:50006".to_string(),
+                        "air".to_string(),
+                    ]),
+                },
+            ];
+
+            assert_eq!(expected, output);
+
+            let input_without_dapr = r#"
+            configuration:
+              ingress:
+                external: false
+                targetPort: 3000
+              dapr:
+                appPort: 3000
+                enabled: false
+                appId: myapp
+            template:
+              containers:
+                - image: node-12
+                  name: myapp
+            "#;
+            let deserialized_map = serde_yaml::Deserializer::from_str(input_without_dapr);
+            let value = Value::deserialize(deserialized_map).unwrap();
+
+            let container = &value
+                .get("template")
+                .unwrap()
+                .get("containers")
+                .unwrap()
+                .as_sequence()
+                .unwrap()[0];
+            let dapr_configuration = value.get("configuration").unwrap().get("dapr");
+            let ingress_configuration = value.get("configuration").unwrap().get("ingress");
+
+            let configuration = AppConfiguration {
+                container,
+                dapr_configuration,
+                ingress_configuration,
+            };
+
+            let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
+            let expected = vec![ContainerAppConfiguration {
+                image: Some("node-12".to_string()),
+                build: None,
+                name: "myapp".to_string(),
+                depends_on: None,
+                networks: None,
+                network_mode: None,
+                environment: None,
+                ports: None,
+                command: None,
+            }];
+
+            assert_eq!(expected, output)
+        }
+    */
 }
