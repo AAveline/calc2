@@ -26,10 +26,8 @@ pub fn deserialize(input: &str) -> Option<Vec<ContainerAppConfiguration>> {
 
     match value {
         Ok(v) => {
-            // Check if a resources property exists
-            let resources = v.get("resources")?;
             // If resources exists, then iterate over containersApp applications
-            let as_mapping = resources.as_mapping()?;
+            let as_mapping = v.get("resources")?.as_mapping()?;
 
             fn filter_by_type(val: &&Value, resource_type: &str) -> bool {
                 match val.get("type") {

@@ -561,157 +561,111 @@ mod tests {
         assert_eq!(dapr_app_port, Some(80));
         assert_eq!(ports, Some(vec!["3000:3000".to_string()]));
     }
-    /*
-        #[test]
-        fn test_parse_app_configuration() {
-            let value = r#"
-            resources:
-              myImage:
-                type: docker:RegistryImage
-                properties:
-                  name: ${registry.loginServer}/node-app:v1.0.0
-                  build:
-                    context: ${pulumi.cwd}/node-app
-                options:
-                  provider: ${provider}
-              containerapp:
-                type: azure-native:app:ContainerApp
-                properties:
-                  configuration:
-                    ingress:
-                      external: true
-                      targetPort: 80
-                    dapr:
-                      appPort: 8000
-                      enabled: true
-                      appId: myapp
-                  template:
-                    containers:
-                      - image: ${myImage.name}
-                        name: myapp
-            "#;
-            let deserialized_map = serde_yaml::Deserializer::from_str(value);
-            let resources = Value::deserialize(deserialized_map).unwrap();
 
-            let input_with_dapr = r#"
-            configuration:
-              ingress:
-                external: false
-                targetPort: 3000
-              dapr:
-                appPort: 3000
-                enabled: true
-                appId: myapp
-            template:
-              containers:
-                - image: ${myImage.name}
-                  name: myapp
-            "#;
-            let deserialized_map = serde_yaml::Deserializer::from_str(input_with_dapr);
-            let value = Value::deserialize(deserialized_map).unwrap();
-
-            let container = &value
-                .get("template")
-                .unwrap()
-                .get("containers")
-                .unwrap()
-                .as_sequence()
-                .unwrap()[0];
-            let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-            let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-            let configuration = AppConfiguration {
-                container,
-                dapr_configuration,
-                ingress_configuration,
-            };
-
-            let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
-            let expected = vec![
-                ContainerAppConfiguration {
-                    image: None,
-                    build: Some(BuildContext {
-                        context: "./node-app".to_string(),
-                    }),
-                    name: "myapp".to_string(),
-                    depends_on: Some(vec!["placement".to_string()]),
-                    networks: Some(vec![String::from("dapr-network")]),
-                    network_mode: None,
-                    environment: None,
-                    ports: None,
-                    command: None,
-                },
-                ContainerAppConfiguration {
-                    image: Some(String::from("daprio/daprd:edge")),
-                    name: format!("myapp_dapr"),
-                    depends_on: Some(vec![String::from("myapp")]),
-                    network_mode: Some(format!("service:{}", String::from("myapp"))),
-                    environment: None,
-                    ports: None,
-                    networks: None,
-                    build: None,
-                    command: Some(vec![
-                        "./daprd".to_string(),
-                        "-app-id".to_string(),
-                        String::from("myapp"),
-                        "-app-port".to_string(),
-                        "3000".to_string(),
-                        "-placement-host-address".to_string(),
-                        "placement:50006".to_string(),
-                        "air".to_string(),
-                    ]),
-                },
-            ];
-
-            assert_eq!(expected, output);
-
-            let input_without_dapr = r#"
-            configuration:
-              ingress:
-                external: false
-                targetPort: 3000
-              dapr:
-                appPort: 3000
-                enabled: false
-                appId: myapp
-            template:
-              containers:
-                - image: node-12
-                  name: myapp
-            "#;
-            let deserialized_map = serde_yaml::Deserializer::from_str(input_without_dapr);
-            let value = Value::deserialize(deserialized_map).unwrap();
-
-            let container = &value
-                .get("template")
-                .unwrap()
-                .get("containers")
-                .unwrap()
-                .as_sequence()
-                .unwrap()[0];
-            let dapr_configuration = value.get("configuration").unwrap().get("dapr");
-            let ingress_configuration = value.get("configuration").unwrap().get("ingress");
-
-            let configuration = AppConfiguration {
-                container,
-                dapr_configuration,
-                ingress_configuration,
-            };
-
-            let output = parse_app_configuration(resources.get("resources").unwrap(), configuration);
-            let expected = vec![ContainerAppConfiguration {
-                image: Some("node-12".to_string()),
-                build: None,
+    #[test]
+    fn test_parse_app_configuration() {
+        let configuration = AppConfiguration {
+            container: ContainerBluePrint {
+                image: "${myImage.name}".to_string(),
                 name: "myapp".to_string(),
-                depends_on: None,
-                networks: None,
+            },
+            dapr_configuration: Some(DaprBluePrint {
+                appPort: Some(3000),
+                enabled: Some(true),
+                appId: Some("myapp".to_string()),
+            }),
+            ingress_configuration: Some(IngressBluePrint {
+                external: Some(true),
+                targetPort: Some(80),
+            }),
+        };
+
+        let images = vec![ContainerImageBluePrint {
+            name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
+            build: BuildContextBluePrint {
+                context: "${pulumi.cwd}/node-app".to_string(),
+            },
+            referenceName: Some("myImage".to_string()),
+        }];
+
+        let output = parse_app_configuration(&images, configuration);
+
+        let expected = vec![
+            ContainerAppConfiguration {
+                image: None,
+                build: Some(BuildContext {
+                    context: "./node-app".to_string(),
+                }),
+                name: "myapp".to_string(),
+                depends_on: Some(vec!["placement".to_string()]),
+                networks: Some(vec![String::from("dapr-network")]),
                 network_mode: None,
                 environment: None,
-                ports: None,
+                ports: Some(vec!["80:3000".to_string()]),
                 command: None,
-            }];
+            },
+            ContainerAppConfiguration {
+                image: Some(String::from("daprio/daprd:edge")),
+                name: format!("myapp_dapr"),
+                depends_on: Some(vec![String::from("myapp")]),
+                network_mode: Some(format!("service:{}", String::from("myapp"))),
+                environment: None,
+                ports: None,
+                networks: None,
+                build: None,
+                command: Some(vec![
+                    "./daprd".to_string(),
+                    "-app-id".to_string(),
+                    String::from("myapp"),
+                    "-app-port".to_string(),
+                    "3000".to_string(),
+                    "-placement-host-address".to_string(),
+                    "placement:50006".to_string(),
+                    "air".to_string(),
+                ]),
+            },
+        ];
 
-            assert_eq!(expected, output)
-        }
-    */
+        assert_eq!(Some(expected), output);
+
+        let configuration = AppConfiguration {
+            container: ContainerBluePrint {
+                image: "node-12".to_string(),
+                name: "myapp".to_string(),
+            },
+            dapr_configuration: Some(DaprBluePrint {
+                appPort: Some(3000),
+                enabled: Some(false),
+                appId: Some("myapp".to_string()),
+            }),
+            ingress_configuration: Some(IngressBluePrint {
+                external: Some(false),
+                targetPort: Some(80),
+            }),
+        };
+
+        let images = vec![ContainerImageBluePrint {
+            name: "${registry.loginServer}/node-app:v1.0.0".to_string(),
+            build: BuildContextBluePrint {
+                context: "${pulumi.cwd}/node-app".to_string(),
+            },
+            referenceName: Some("myImage".to_string()),
+        }];
+
+        let output = parse_app_configuration(&images, configuration);
+
+        let expected = vec![ContainerAppConfiguration {
+            image: Some("node-12".to_string()),
+            build: None,
+            name: "myapp".to_string(),
+            depends_on: None,
+            networks: None,
+            network_mode: None,
+            environment: None,
+            ports: None,
+            command: None,
+        }];
+
+        assert_eq!(Some(expected), output);
+    }
 }
