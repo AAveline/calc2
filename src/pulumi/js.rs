@@ -26,7 +26,7 @@ fn parse_line(line: &str) -> String {
                     let with_quotes = format!("\"{}\",", computed);
                     // Check if it's a number or a boolean
                     let re = Regex::new(r"^[0-9]+").unwrap().is_match(computed);
-
+                    // Need to cleanup this part
                     if re || computed == "true" || computed == "false" {
                         let a = format!("{},", computed.to_string());
                         a
@@ -71,7 +71,7 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
 
     let mut images: Vec<ContainerImageBluePrint> = vec![];
 
-    for (image_name, image, service_name) in images_services {
+    for (_image_name, image, service_name) in images_services {
         let mut s = String::from("");
 
         for line in image.trim().lines() {
@@ -80,6 +80,7 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
             s.push_str(&parsed_line);
         }
 
+        // TODO: Refacto this part (generic replacer ? or prune method)
         s = s
             .replace("})", "}")
             .replace(",}", "}")
@@ -87,7 +88,6 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
 
         let mut serialized: ContainerImageBluePrint = serde_json::from_str(&s).unwrap();
    
-        // If it's a refenrece; then name is reference_name + imageName
          if service_name.is_some() { 
             serialized.name = Some(service_name.clone().unwrap());
             serialized.reference_name = Some(format!("{}.imageName", service_name.unwrap()));
@@ -118,7 +118,7 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
            // println!("{parsed_line}");
             s.push_str(&parsed_line);
         }
-
+        // TODO: Refacto this part (generic replacer ? or prune method)
         s = s.replace("})", "}").replace(",}", "}");
 
         let serialized: ContainerAppBluePrint = serde_json::from_str(&s).unwrap();
@@ -137,9 +137,8 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 
     /*
         TODO: Handle result/error
-        Need to cast imageName to name for correct reference
     */
-  Ok(services)
+    Ok(services)
     //  Err(String::from("s"))
 
     // TODO: Refacto this

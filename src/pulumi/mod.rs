@@ -82,7 +82,6 @@ fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
     {
         Some(v) => {
             let name = v.get(1).map_or("", |m| m.as_str()).to_string();
-            let property = Some(v.get(2).map_or("", |m| m.as_str()).to_string());
 
             Ok(Resource { name, is_reference })
         }
@@ -122,6 +121,7 @@ fn check_and_match_reference(
 
             Some(DockerImageForPulumi {
                 name: None,
+                // TODO: Need to catch all possible pattern (pulumi.cwd, pulumi.all, pulumi.interpolate etc...)
                 path: Some(has_build_context.replace("${pulumi.cwd}", ".")),
                 is_context: true,
             })
