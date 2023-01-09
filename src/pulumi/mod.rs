@@ -54,10 +54,12 @@ impl Serializer for Pulumi {
 #[derive(Debug, PartialEq)]
 struct Resource {
     name: String,
-    property: Option<String>,
     is_reference: bool,
 }
 
+/***
+ * Docker Pulumi Formatter image
+ */
 #[derive(Debug, PartialEq)]
 pub struct DockerImageForPulumi {
     name: Option<String>,
@@ -73,7 +75,7 @@ pub struct AppConfiguration {
 }
 
 fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
-    let is_reference = s.contains("${");
+    let mut is_reference = s.contains("${");
     match Regex::new(r"\$\{(.+)\.(.+)\}")
         .expect("Should match previous regex")
         .captures(&s)
@@ -81,17 +83,18 @@ fn extract_and_parse_resource_name(s: String) -> Result<Resource, ()> {
         Some(v) => {
             let name = v.get(1).map_or("", |m| m.as_str()).to_string();
             let property = Some(v.get(2).map_or("", |m| m.as_str()).to_string());
+
+            Ok(Resource { name, is_reference })
+        }
+        None => {
+            if s.contains("imageName") {
+                is_reference = true;
+            }
             Ok(Resource {
-                name,
-                property,
+                name: s,
                 is_reference,
             })
         }
-        None => Ok(Resource {
-            name: s,
-            property: None,
-            is_reference,
-        }),
     }
 }
 
@@ -99,46 +102,31 @@ fn check_and_match_reference(
     images: &Vec<ContainerImageBluePrint>,
     resource: Resource,
 ) -> Option<DockerImageForPulumi> {
-    let name = resource.name;
+    // If has no reference, return contextual image
+    if !resource.is_reference {
+        return Some(DockerImageForPulumi {
+            is_context: false,
+            name: Some(resource.name),
+            path: None,
+        });
+    }
+
+    let name = &resource.name;
     let val = images
         .iter()
-        .find(|image| image.reference_name.clone().unwrap() == name);
-    let re = Regex::new(r"(\$\{.+\})(/)(.+)").unwrap();
+        .find(|image| &image.reference_name.clone().unwrap() == name);
 
     match val {
         Some(val) => {
-            let has_build_context = &val.build;
-
-            let a = re.captures(&has_build_context.context).unwrap();
-
-            let image_name = a.get(3).map_or("", |m| m.as_str());
-            let context_path = a.get(1).map_or("", |m| m.as_str());
-
-            if image_name.is_empty() | context_path.is_empty() {
-                return None;
-            }
+            let has_build_context = &val.build.context;
 
             Some(DockerImageForPulumi {
                 name: None,
-                path: Some(format!(
-                    "{}/{}",
-                    context_path.replace("${pulumi.cwd}", "."),
-                    image_name
-                )),
+                path: Some(has_build_context.replace("${pulumi.cwd}", ".")),
                 is_context: true,
             })
         }
-        None => {
-            if resource.is_reference {
-                None
-            } else {
-                Some(DockerImageForPulumi {
-                    name: Some(name.to_string()),
-                    is_context: false,
-                    path: None,
-                })
-            }
-        }
+        None => None,
     }
 }
 
@@ -328,7 +316,6 @@ mod tests {
         let input1 = "${resource.property}".to_string();
         let expected = Ok(Resource {
             name: "resource".to_string(),
-            property: Some("property".to_string()),
             is_reference: true,
         });
         let output = extract_and_parse_resource_name(input1);
@@ -337,7 +324,6 @@ mod tests {
         let input2 = "resource".to_string();
         let expected = Ok(Resource {
             name: "resource".to_string(),
-            property: None,
             is_reference: false,
         });
         let output = extract_and_parse_resource_name(input2);

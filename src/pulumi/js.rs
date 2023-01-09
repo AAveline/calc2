@@ -8,9 +8,10 @@ use crate::serializer::{
 
 fn parse_line(line: &str) -> String {
     let a = line.replace(" ", "");
-    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`$"\{}\[\]]+)?"####).unwrap();
-
+    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`/"\{}\[\]]+)?"####).unwrap();
+    
     let captures = re.captures(&a);
+    
     let computed = match captures {
         Some(c) => {
             let key = c.get(1).unwrap().as_str();
@@ -23,6 +24,7 @@ fn parse_line(line: &str) -> String {
                     computed.to_string()
                 } else {
                     let with_quotes = format!("\"{}\",", computed);
+                    // Check if it's a number or a boolean
                     let re = Regex::new(r"^[0-9]+").unwrap().is_match(computed);
 
                     if re || computed == "true" || computed == "false" {
@@ -37,7 +39,7 @@ fn parse_line(line: &str) -> String {
             };
 
             let key = format!("\"{}\"", key).replace("\"\"", "\"");
-            let value = value.replace("\"\"", "\"");
+            let value = value.replace("\"\"", "\"").replace("`", "");
 
             let computed = format!("{key}:{value}");
 
@@ -49,27 +51,48 @@ fn parse_line(line: &str) -> String {
 }
 
 fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
-    let images_services: Vec<(String, String)> =
-        Regex::new(r####"new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
+    // TODO: get reference name of the resource
+    let images_services: Vec<(String, String, Option<String>)> =
+        Regex::new(r####"((const|let) ?(?P<serviceName>.+) ?= ?)?new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
             .unwrap()
             .captures_iter(&input)
-            .map(|container| (container["name"].to_owned(), container["value"].to_owned()))
+            .map(|container| {
+
+                let service_name = match container.name("serviceName") {
+                    Some(v) => {
+                        Some(v.as_str().trim().to_string())
+                    },
+                    None => None,
+                };
+                
+                (container["name"].to_owned(), container["value"].to_owned(), service_name)
+})
             .collect();
+
     let mut images: Vec<ContainerImageBluePrint> = vec![];
 
-    for (image_name, image) in images_services {
+    for (image_name, image, service_name) in images_services {
         let mut s = String::from("");
 
         for line in image.trim().lines() {
             let parsed_line = parse_line(line);
+            
             s.push_str(&parsed_line);
         }
 
-        s = s.replace("})", "}").replace(",}", "}");
+        s = s
+            .replace("})", "}")
+            .replace(",}", "}")
+            .replace("imageName", "name");
 
         let mut serialized: ContainerImageBluePrint = serde_json::from_str(&s).unwrap();
+   
+        // If it's a refenrece; then name is reference_name + imageName
+         if service_name.is_some() { 
+            serialized.name = Some(service_name.clone().unwrap());
+            serialized.reference_name = Some(format!("{}.imageName", service_name.unwrap()));
+         } 
 
-        serialized.reference_name = Some(image_name);
         images.push(serialized);
     }
 
@@ -92,13 +115,14 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
 
         for line in container.trim().lines() {
             let parsed_line = parse_line(line);
+           // println!("{parsed_line}");
             s.push_str(&parsed_line);
         }
 
         s = s.replace("})", "}").replace(",}", "}");
 
         let serialized: ContainerAppBluePrint = serde_json::from_str(&s).unwrap();
-
+  
         containers.push(serialized);
     }
 
@@ -111,7 +135,12 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 
     let services = pulumi::build_configuration(apps, images);
 
-    Ok(services)
+    /*
+        TODO: Handle result/error
+        Need to cast imageName to name for correct reference
+    */
+  Ok(services)
+    //  Err(String::from("s"))
 
     // TODO: Refacto this
     // Err("An error occured".to_string())

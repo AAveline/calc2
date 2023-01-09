@@ -7,19 +7,6 @@ use crate::serializer::{
     ContainerAppBluePrint, ContainerAppConfiguration, ContainerImageBluePrint,
 };
 
-#[derive(Debug, PartialEq)]
-struct Resource {
-    name: String,
-    property: Option<String>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct DockerImageForPulumi {
-    name: Option<String>,
-    path: Option<String>,
-    is_context: bool,
-}
-
 fn filter_by_type(val: &&Value, resource_type: &str) -> bool {
     match val.get("type") {
         Some(x) => x.as_str() == Some(resource_type),
@@ -75,6 +62,7 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
             let images: Vec<ContainerImageBluePrint> = get_images(as_mapping);
             let apps: Vec<ContainerAppBluePrint> = get_apps(as_mapping);
 
+            println!("{:?}", images);
             let services = pulumi::build_configuration(apps, images);
 
             Ok(services)

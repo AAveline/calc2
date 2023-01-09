@@ -1,0 +1,46 @@
+version: '3.9'
+services:
+  myapp:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    ports:
+    - 80:8000
+    build:
+      context: ./node-app
+  myapp_dapr:
+    depends_on:
+    - myapp
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - myapp
+    - -app-port
+    - '8000'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:myapp
+  myappbis:
+    image: node:12
+    ports:
+    - 80:80
+  some-app:
+    ports:
+    - 3000:3000
+    build:
+      context: ./node-app
+  placement:
+    networks:
+    - dapr-network
+    image: daprio/dapr
+    ports:
+    - 50006:50006
+    command:
+    - ./placement
+    - -port
+    - '50006'
+networks:
+  dapr-network: {}
