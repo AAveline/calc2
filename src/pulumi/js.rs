@@ -8,9 +8,9 @@ use crate::serializer::{
 fn parse_line(line: &str) -> String {
     let a = line.replace(" ", "");
     let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`/"\{}\[\]]+)?"####).unwrap();
-    
+
     let captures = re.captures(&a);
-    
+
     let computed = match captures {
         Some(c) => {
             let key = c.get(1).unwrap().as_str();
@@ -62,7 +62,7 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
                     },
                     None => None,
                 };
-                
+
                 (container["name"].to_owned(), container["value"].to_owned(), service_name)
 })
             .collect();
@@ -74,7 +74,7 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
 
         for line in image.trim().lines() {
             let parsed_line = parse_line(line);
-            
+
             s.push_str(&parsed_line);
         }
 
@@ -85,11 +85,11 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
             .replace("imageName", "name");
 
         let mut serialized: ContainerImageBluePrint = serde_json::from_str(&s).unwrap();
-   
-         if service_name.is_some() { 
+
+        if service_name.is_some() {
             serialized.name = Some(service_name.clone().unwrap());
             serialized.reference_name = Some(format!("{}.imageName", service_name.unwrap()));
-         } 
+        }
 
         images.push(serialized);
     }
@@ -113,14 +113,13 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
 
         for line in container.trim().lines() {
             let parsed_line = parse_line(line);
-           // println!("{parsed_line}");
             s.push_str(&parsed_line);
         }
         // TODO: Refacto this part (generic replacer ? or prune method)
         s = s.replace("})", "}").replace(",}", "}");
 
         let serialized: ContainerAppBluePrint = serde_json::from_str(&s).unwrap();
-  
+
         containers.push(serialized);
     }
 
@@ -142,7 +141,6 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
     // TODO: Refacto this
     // Err("An error occured".to_string())
 }
-
 
 mod tests {
     use super::*;

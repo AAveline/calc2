@@ -62,7 +62,6 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
             let images: Vec<ContainerImageBluePrint> = get_images(as_mapping);
             let apps: Vec<ContainerAppBluePrint> = get_apps(as_mapping);
 
-            println!("{:?}", images);
             let services = pulumi::build_configuration(apps, images);
 
             Ok(services)
