@@ -1,37 +1,71 @@
 version: '3.9'
 services:
-  myapp:
+  remix:
     depends_on:
     - placement
     networks:
     - dapr-network
+    image: node-12
     ports:
-    - 80:8000
-    build:
-      context: ./node-app
-  myapp_dapr:
+    - 8000:8000
+  remix_dapr:
     depends_on:
-    - myapp
+    - remix
     image: daprio/daprd:edge
     command:
     - ./daprd
     - -app-id
-    - myapp
+    - remix
     - -app-port
     - '8000'
     - -placement-host-address
     - placement:50006
     - air
-    network_mode: service:myapp
-  myappbis:
-    image: node:12
-    ports:
-    - 80:80
-  some-app:
-    ports:
-    - 3000:3000
+    network_mode: service:remix
+  service1:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
     build:
-      context: ./node-app
+      context: ../services/service1
+  service1_dapr:
+    depends_on:
+    - service1
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - service1
+    - -app-port
+    - '3000'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:service1
+  service2:
+    depends_on:
+    - placement
+    networks:
+    - dapr-network
+    ports:
+    - 80:3001
+    build:
+      context: ../services/service1
+  service2_dapr:
+    depends_on:
+    - service2
+    image: daprio/daprd:edge
+    command:
+    - ./daprd
+    - -app-id
+    - service2
+    - -app-port
+    - '3001'
+    - -placement-host-address
+    - placement:50006
+    - air
+    network_mode: service:service2
   placement:
     networks:
     - dapr-network

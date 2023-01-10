@@ -1,6 +1,5 @@
 use crate::pulumi;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 
 use crate::serializer::{
     ContainerAppBluePrint, ContainerAppConfiguration, ContainerImageBluePrint,
@@ -51,7 +50,6 @@ fn parse_line(line: &str) -> String {
 }
 
 fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
-    // TODO: get reference name of the resource
     let images_services: Vec<(String, String, Option<String>)> =
         Regex::new(r####"((const|let) ?(?P<serviceName>.+) ?= ?)?new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
             .unwrap()
@@ -143,4 +141,18 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 
     // TODO: Refacto this
     // Err("An error occured".to_string())
+}
+
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_line() {}
+
+    #[test]
+    fn test_get_images() {}
+
+    #[test]
+    fn test_get_apps() {}
 }

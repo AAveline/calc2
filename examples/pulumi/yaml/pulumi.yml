@@ -62,25 +62,42 @@ resources:
         - address: ${registry.loginServer}
           username: ${adminUsername}
           password: ${adminPasswords[0].value}
-  myImage:
+  remixImage:
     type: docker:RegistryImage
     properties:
-      name: ${registry.loginServer}/node-app:v1.0.0
+      name: ${registry.loginServer}/remix:v1
       build:
-        context: ${pulumi.cwd}/node-app
+        context: ../frontend
     options:
       provider: ${provider}
-  containerapp:
+  service1Image:
+    type: docker:RegistryImage
+    properties:
+      name: ${registry.loginServer}/service1:v1
+      build:
+        context: ../services/service1
+    options:
+      provider: ${provider}
+  service2Image:
+    type: docker:RegistryImage
+    properties:
+      name: ${registry.loginServer}/service2:v1
+      build:
+        context: ../services/service1
+    options:
+      provider: ${provider}
+
+  frontend:
     type: azure-native:app:ContainerApp
     properties:
       configuration:
         ingress:
           external: true
-          targetPort: 80
+          targetPort: 8000
         dapr:
           appPort: 8000
           enabled: true
-          appId: myapp
+          appId: "remix"
         registries:
           - server: ${registry.loginServer}
             username: ${adminUsername}
@@ -93,40 +110,43 @@ resources:
       resourceGroupName: ${resourceGroup.name}
       template:
         containers:
-          - image: ${myImage.name}
-            name: myapp
-  containerappbis:
+          - image: node-12
+            name: remix
+
+  service1:
+    type: azure-native:app:ContainerApp
+    properties:
+      configuration:
+        dapr:
+          appPort: 3000
+          enabled: true
+          appId: service1
+        registries:
+          - server: ${registry.loginServer}
+            username: ${adminUsername}
+            passwordSecretRef: "pwd"
+        secrets:
+          - name: "pwd"
+            value: ${adminPasswords[0].value}
+      location: westeurope
+      managedEnvironmentId: ${managedEnvironment.id}
+      resourceGroupName: ${resourceGroup.name}
+      template:
+        containers:
+          - image: ${service1Image.name}
+            name: service1
+
+  service2:
     type: azure-native:app:ContainerApp
     properties:
       configuration:
         ingress:
           external: true
           targetPort: 80
-        registries:
-          - server: ${registry.loginServer}
-            username: ${adminUsername}
-            passwordSecretRef: "pwd"
-        secrets:
-          - name: "pwd"
-            value: ${adminPasswords[0].value}
-      location: westeurope
-      managedEnvironmentId: ${managedEnvironment.id}
-      resourceGroupName: ${resourceGroup.name}
-      template:
-        containers:
-          - image: node:12
-            name: myappbis
-  containerappter:
-    type: azure-native:app:ContainerApp
-    properties:
-      configuration:
-        ingress:
-          external: true
-          targetPort: 3000
         dapr:
-          appPort: 3000
-          enabled: false
-          appId: some-app
+          appPort: 3001
+          enabled: true
+          appId: service2
         registries:
           - server: ${registry.loginServer}
             username: ${adminUsername}
@@ -139,7 +159,7 @@ resources:
       resourceGroupName: ${resourceGroup.name}
       template:
         containers:
-          - image: ${myImage.name}
-            name: some-app
+          - image: ${service2Image.name}
+            name: service2
 #outputs:
   #endpoint: https://${containerapp.configuration.ingress.fqdn}

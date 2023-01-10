@@ -5,7 +5,7 @@ services:
     - placement
     networks:
     - dapr-network
-    image: node12
+    image: node
     ports:
     - 8000:8000
   remix_dapr:
@@ -22,32 +22,34 @@ services:
     - placement:50006
     - air
     network_mode: service:remix
-  service:
+  service1:
     depends_on:
     - placement
     networks:
     - dapr-network
     build:
       context: ../services/service1
-  service_dapr:
+  service1_dapr:
     depends_on:
-    - service
+    - service1
     image: daprio/daprd:edge
     command:
     - ./daprd
     - -app-id
-    - service
+    - service1
     - -app-port
     - '3000'
     - -placement-host-address
     - placement:50006
     - air
-    network_mode: service:service
+    network_mode: service:service1
   service2:
     depends_on:
     - placement
     networks:
     - dapr-network
+    ports:
+    - 80:3001
     build:
       context: ../services/service2
   service2_dapr:

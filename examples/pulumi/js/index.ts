@@ -74,7 +74,7 @@ const frontendApp = new app.ContainerApp("frontend", {
     template: {
         containers: [{
             name: "remix",
-            image: "node12",
+            image: "node-12",
         }],
     },
 });
@@ -101,7 +101,7 @@ const service1 = new app.ContainerApp("service1", {
     },
     template: {
         containers: [{
-            name: "service",
+            name: "service1",
             image: service1Image.imageName,
         }],
     },
@@ -116,6 +116,10 @@ const service2 = new app.ContainerApp("service2", {
             appProtocol: "http",
             enabled: true,
             appId: "service2"
+        },
+        ingress: {
+            targetPort: 80,
+            external: true
         },
         registries: [{
             server: registry.loginServer,
