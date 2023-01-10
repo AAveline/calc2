@@ -278,7 +278,7 @@ fn parse_app_configuration(
 pub fn build_configuration(
     apps: Vec<ContainerAppBluePrint>,
     images: Vec<ContainerImageBluePrint>,
-) -> Vec<ContainerAppConfiguration> {
+) -> Option<Vec<ContainerAppConfiguration>> {
     let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
     for app in apps {
@@ -286,8 +286,7 @@ pub fn build_configuration(
         let dapr_configuration = app.configuration.dapr;
         let ingress_configuration = app.configuration.ingress;
 
-        let mut a: Vec<ContainerAppConfiguration> = containers
-            .unwrap()
+        let mut a: Vec<ContainerAppConfiguration> = containers?
             .iter()
             .flat_map(|container| {
                 parse_app_configuration(
@@ -304,7 +303,7 @@ pub fn build_configuration(
 
         services.append(&mut a);
     }
-    services
+    Some(services)
 }
 
 mod tests {

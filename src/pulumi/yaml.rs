@@ -64,13 +64,15 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 
             let services = pulumi::build_configuration(apps, images);
 
-            Ok(services)
+            match services {
+                Some(val) => Ok(val),
+                None => Err("No container to deserialize".to_string()),
+            }
         }
 
         Err(e) => {
             error!("{}", e);
-            // TODO refacto this
-            Err("An error occured".to_string())
+            Err(e.to_string())
         }
     }
 }
@@ -219,6 +221,6 @@ mod tests {
 
         let output = deserialize(wrong_format);
 
-        assert_eq!(Err("An error occured".to_string()), output);
+        assert_eq!(Err("did not find expected key at line 4 column 15, while parsing a block mapping at line 2 column 11".to_string()), output);
     }
 }

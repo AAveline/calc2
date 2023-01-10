@@ -49,6 +49,11 @@ fn parse_line(line: &str) -> String {
     computed
 }
 
+fn prune_output(output: String) -> String {
+    //  s = s.replace("})", "}").replace(",}", "}");
+    output.replace("})", "}").replace(",}", "}")
+}
+
 fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
     let images_services: Vec<(String, String, Option<String>)> =
         Regex::new(r####"((const|let) ?(?P<serviceName>.+) ?= ?)?new docker.Image\("(?P<name>.+)",( ?)(?P<value>\{(\n.+)+[^;s"\n.+])"####)
@@ -78,10 +83,8 @@ fn get_images(input: &str) -> Vec<ContainerImageBluePrint> {
             s.push_str(&parsed_line);
         }
 
-        // TODO: Refacto this part (generic replacer ? or prune method)
-        s = s
-            .replace("})", "}")
-            .replace(",}", "}")
+        s = prune_output(s)
+            // Add custom behavior
             .replace("imageName", "name");
 
         let mut serialized: ContainerImageBluePrint = serde_json::from_str(&s).unwrap();
@@ -115,8 +118,8 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
             let parsed_line = parse_line(line);
             s.push_str(&parsed_line);
         }
-        // TODO: Refacto this part (generic replacer ? or prune method)
-        s = s.replace("})", "}").replace(",}", "}");
+
+        s = prune_output(s);
 
         let serialized: ContainerAppBluePrint = serde_json::from_str(&s).unwrap();
 
@@ -132,14 +135,10 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 
     let services = pulumi::build_configuration(apps, images);
 
-    /*
-        TODO: Handle result/error
-    */
-    Ok(services)
-    //  Err(String::from("s"))
-
-    // TODO: Refacto this
-    // Err("An error occured".to_string())
+    match services {
+        Some(val) => Ok(val),
+        None => Err("No container to deserialize".to_string()),
+    }
 }
 
 mod tests {
