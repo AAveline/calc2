@@ -7,7 +7,7 @@ use crate::serializer::{
 
 fn parse_line(line: &str) -> String {
     let a = line.replace(" ", "");
-    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`/"\{}\[\]]+)?"####).unwrap();
+    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`'/"\{}\[\]]+)?"####).unwrap();
 
     let captures = re.captures(&a);
 
@@ -15,7 +15,7 @@ fn parse_line(line: &str) -> String {
         Some(c) => {
             let key = c.get(1).unwrap().as_str();
             let value = if c.get(3).is_some() {
-                let computed = c.get(3).unwrap().as_str();
+                let mut computed = c.get(3).unwrap().as_str();
                 let tokens = ["{", "[{"];
                 let has_token = tokens.contains(&computed);
 
@@ -38,7 +38,10 @@ fn parse_line(line: &str) -> String {
             };
 
             let key = format!("\"{}\"", key).replace("\"\"", "\"");
-            let value = value.replace("\"\"", "\"").replace("`", "");
+            let value = value
+                .replace("\"\"", "\"")
+                .replace("`", "")
+                .replace("'", "");
 
             let computed = format!("{key}:{value}");
 
@@ -145,7 +148,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_line() {}
+    fn test_parse_line() {
+        let output = parse_line("key: ");
+        assert_eq!("\"key\":", output);
+
+        let output = parse_line("key: value");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":\"value\"");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("key:\"value\"");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":value");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":value,");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":'value',");
+        assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":`value`,");
+        assert_eq!("\"key\":\"value\",", output);
+    }
 
     #[test]
     fn test_get_images() {}
