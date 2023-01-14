@@ -45,8 +45,10 @@ pub struct ContainerBluePrint {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContainerAppBluePrint {
-    pub configuration: ConfigurationBluePrint,
-    pub template: TemplateBluePrint,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationBluePrint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<TemplateBluePrint>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

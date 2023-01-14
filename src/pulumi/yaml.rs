@@ -176,7 +176,7 @@ mod tests {
         let output = get_apps(as_mapping);
 
         let expected = vec![ContainerAppBluePrint {
-            configuration: ConfigurationBluePrint {
+            configuration: Some(ConfigurationBluePrint {
                 ingress: Some(IngressBluePrint {
                     external: Some(true),
                     target_port: Some(80),
@@ -186,13 +186,13 @@ mod tests {
                     app_port: Some(3000),
                     enabled: Some(true),
                 }),
-            },
-            template: TemplateBluePrint {
+            }),
+            template: Some(TemplateBluePrint {
                 containers: Some(vec![ContainerBluePrint {
                     name: "myapp".to_string(),
                     image: "${myImage.name}".to_string(),
                 }]),
-            },
+            }),
         }];
 
         assert_eq!(expected, output);

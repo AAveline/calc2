@@ -29,8 +29,7 @@ fn parse_line(line: &str) -> String {
                     let re = Regex::new(r"^[0-9]+").unwrap().is_match(computed);
                     // Need to cleanup this part
                     if re || computed == "true" || computed == "false" {
-                        let a = format!("{},", computed.to_string());
-                        a
+                        format!("{},", computed.to_string())
                     } else {
                         with_quotes.to_string()
                     }
@@ -187,6 +186,9 @@ mod tests {
 
         let output = parse_line("\"key\":\"node:12.4\",");
         assert_eq!("\"key\":\"node:12.4\",", output);
+
+        let output = parse_line("\"key\":\"{}\"");
+        assert_eq!("\"key\":\"{}\",", output);
     }
 
     #[test]
@@ -280,13 +282,9 @@ mod tests {
         let expected: Vec<ContainerAppBluePrint> = vec![];
         assert_eq!(expected, output);
 
-        // TODO
-        // Valid resource name and context with reference
-        /*
+        // Valid resource
         let data = r####"
                 const frontendApp = new app.ContainerApp("frontend", {
-                    resourceGroupName: resourceGroup.name,
-                    managedEnvironmentId: managedEnv.id,
                     configuration: {
                         dapr: {
                             enabled: true,
@@ -308,7 +306,7 @@ mod tests {
 
         let output = get_apps(data);
         let expected = vec![ContainerAppBluePrint {
-            configuration: ConfigurationBluePrint {
+            configuration: Some(ConfigurationBluePrint {
                 dapr: Some(DaprBluePrint {
                     app_id: Some("remix".to_string()),
                     app_port: Some(8000),
@@ -318,16 +316,105 @@ mod tests {
                     external: Some(true),
                     target_port: Some(8000),
                 }),
-            },
-            template: TemplateBluePrint {
+            }),
+            template: Some(TemplateBluePrint {
                 containers: Some(vec![ContainerBluePrint {
                     image: "node:12".to_string(),
                     name: "remix".to_string(),
                 }]),
-            },
+            }),
         }];
 
         assert_eq!(expected, output);
-        */
+
+        // Valid resource without ingress
+
+        let data = r####"
+        const frontendApp = new app.ContainerApp("frontend", {
+            configuration: {
+                dapr: {
+                    enabled: true,
+                    appPort: 8000,
+                    appId: "remix"
+                },
+            },
+            template: {
+                containers: [{
+                    name: "remix",
+                    image: "node:12",
+                }],
+            },
+        });"####;
+
+        let output = get_apps(data);
+        let expected = vec![ContainerAppBluePrint {
+            configuration: Some(ConfigurationBluePrint {
+                dapr: Some(DaprBluePrint {
+                    app_id: Some("remix".to_string()),
+                    app_port: Some(8000),
+                    enabled: Some(true),
+                }),
+                ingress: None,
+            }),
+            template: Some(TemplateBluePrint {
+                containers: Some(vec![ContainerBluePrint {
+                    image: "node:12".to_string(),
+                    name: "remix".to_string(),
+                }]),
+            }),
+        }];
+
+        assert_eq!(expected, output);
+
+        // Valid resource with empty configuration
+        let data = r####"
+         const frontendApp = new app.ContainerApp("frontend", {
+             configuration: {},
+             template: {
+                 containers: [{
+                     name: "remix",
+                     image: "node:12",
+                 }],
+             },
+         });"####;
+
+        let output = get_apps(data);
+        let expected = vec![ContainerAppBluePrint {
+            configuration: None,
+            template: Some(TemplateBluePrint {
+                containers: Some(vec![ContainerBluePrint {
+                    image: "node:12".to_string(),
+                    name: "remix".to_string(),
+                }]),
+            }),
+        }];
+
+        assert_eq!(expected, output);
+
+        // Valid resource without configuration
+        let data = r####"
+         const frontendApp = new app.ContainerApp("frontend", {
+             resourceGroupName: resourceGroup.name,
+             managedEnvironmentId: managedEnv.id,
+             template: {
+                 containers: [{
+                     name: "remix",
+                     image: "node:12",
+                 }],
+             },
+         });"####;
+
+        let output = get_apps(data);
+        let expected = vec![ContainerAppBluePrint {
+            configuration: None,
+            template: Some(TemplateBluePrint {
+                containers: Some(vec![ContainerBluePrint {
+                    image: "node:12".to_string(),
+                    name: "remix".to_string(),
+                }]),
+            }),
+        }];
+
+        assert_eq!(expected, output);
     }
 }

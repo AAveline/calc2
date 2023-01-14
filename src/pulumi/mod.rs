@@ -282,9 +282,9 @@ pub fn build_configuration(
     let mut services: Vec<ContainerAppConfiguration> = Vec::new();
 
     for app in apps {
-        let containers = app.template.containers;
-        let dapr_configuration = app.configuration.dapr;
-        let ingress_configuration = app.configuration.ingress;
+        let containers = app.template.unwrap().containers;
+        let dapr_configuration = app.configuration.clone().unwrap().dapr;
+        let ingress_configuration = app.configuration.unwrap().ingress;
 
         let mut a: Vec<ContainerAppConfiguration> = containers?
             .iter()
