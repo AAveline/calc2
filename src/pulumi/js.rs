@@ -1,8 +1,10 @@
 use crate::pulumi;
 use regex::Regex;
+use std::panic;
 
 use crate::serializer::{
-    ContainerAppBluePrint, ContainerAppConfiguration, ContainerImageBluePrint,
+    BuildContextBluePrint, ContainerAppBluePrint, ContainerAppConfiguration,
+    ContainerImageBluePrint,
 };
 
 fn parse_line(line: &str) -> String {
@@ -175,7 +177,85 @@ mod tests {
     }
 
     #[test]
-    fn test_get_images() {}
+    fn test_get_images() {
+        // No valid resource
+        let data = r####"
+        const test = new NoResource() {}
+        "####;
+        let output = get_images(data);
+        let expected: Vec<ContainerImageBluePrint> = vec![];
+        assert_eq!(expected, output);
+
+        // Valid resource name and context with reference
+        let data = r####"
+        const remixImage = new docker.Image("remix", {
+            imageName: pulumi.interpolate`${registry.loginServer}/remix:v1`,
+            build: { 
+                context: "../frontend",
+            },
+        });"####;
+
+        let output = get_images(data);
+        let expected = vec![ContainerImageBluePrint {
+            name: Some("remixImage".to_string()),
+            build: BuildContextBluePrint {
+                context: "../frontend".to_string(),
+            },
+            reference_name: Some("remixImage.imageName".to_string()),
+        }];
+
+        assert_eq!(expected, output);
+
+        // Valid resource name and context without reference
+        let data = r####"
+        const remixImage = new docker.Image("remix", {
+            imageName: "node-18",
+            build: { 
+                context: "../frontend",
+            },
+        });"####;
+
+        let output = get_images(data);
+        let expected = vec![ContainerImageBluePrint {
+            name: Some("remixImage".to_string()),
+            build: BuildContextBluePrint {
+                context: "../frontend".to_string(),
+            },
+            reference_name: Some("remixImage.imageName".to_string()),
+        }];
+
+        assert_eq!(expected, output);
+
+        // TODO
+        // Valid resource name and context with direct string path
+        /*let data = r####"
+              const remixImage = new docker.Image("remix", {
+                  imageName: "node-18",
+                  build: "",
+              });"####;
+
+        let output = get_images(data);
+        let expected = vec![ContainerImageBluePrint {
+            name: Some("remixImage".to_string()),
+            build: BuildContextBluePrint {
+                context: "../frontend".to_string(),
+            },
+            reference_name: Some("remixImage.imageName".to_string()),
+        }];
+
+        assert_eq!(expected, output);*/
+
+        // Invalid build context
+        let data = r####"
+                const remixImage = new docker.Image("remix", {
+                    imageName: "node-18",
+                    
+                });"####;
+
+        let expected = panic::catch_unwind(|| get_images(data));
+
+        assert!(expected.is_err());
+    }
 
     #[test]
     fn test_get_apps() {}
