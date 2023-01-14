@@ -9,7 +9,7 @@ use crate::serializer::{
 
 fn parse_line(line: &str) -> String {
     let a = line.replace(" ", "");
-    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9.`'/"\{}\[\]]+)?"####).unwrap();
+    let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9-:.`'/"\{}\[\]]+)?"####).unwrap();
 
     let captures = re.captures(&a);
 
@@ -123,7 +123,6 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
             let parsed_line = parse_line(line);
             s.push_str(&parsed_line);
         }
-
         s = prune_output(s);
 
         let serialized: ContainerAppBluePrint = serde_json::from_str(&s).unwrap();
@@ -147,6 +146,11 @@ pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String
 }
 
 mod tests {
+    use crate::serializer::{
+        ConfigurationBluePrint, ContainerBluePrint, DaprBluePrint, IngressBluePrint,
+        TemplateBluePrint,
+    };
+
     use super::*;
 
     #[test]
@@ -174,6 +178,15 @@ mod tests {
 
         let output = parse_line("\"key\":`value`,");
         assert_eq!("\"key\":\"value\",", output);
+
+        let output = parse_line("\"key\":\"node-12\",");
+        assert_eq!("\"key\":\"node-12\",", output);
+
+        let output = parse_line("\"key\":\"node:12\",");
+        assert_eq!("\"key\":\"node:12\",", output);
+
+        let output = parse_line("\"key\":\"node:12.4\",");
+        assert_eq!("\"key\":\"node:12.4\",", output);
     }
 
     #[test]
@@ -258,5 +271,63 @@ mod tests {
     }
 
     #[test]
-    fn test_get_apps() {}
+    fn test_get_apps() {
+        // No valid resource
+        let data = r####"
+                const test = new NoResource() {}
+                "####;
+        let output = get_apps(data);
+        let expected: Vec<ContainerAppBluePrint> = vec![];
+        assert_eq!(expected, output);
+
+        // TODO
+        // Valid resource name and context with reference
+        /*
+        let data = r####"
+                const frontendApp = new app.ContainerApp("frontend", {
+                    resourceGroupName: resourceGroup.name,
+                    managedEnvironmentId: managedEnv.id,
+                    configuration: {
+                        dapr: {
+                            enabled: true,
+                            appPort: 8000,
+                            appId: "remix"
+                        },
+                        ingress: {
+                            external: true,
+                            targetPort: 8000,
+                        },
+                    },
+                    template: {
+                        containers: [{
+                            name: "remix",
+                            image: "node:12",
+                        }],
+                    },
+                });"####;
+
+        let output = get_apps(data);
+        let expected = vec![ContainerAppBluePrint {
+            configuration: ConfigurationBluePrint {
+                dapr: Some(DaprBluePrint {
+                    app_id: Some("remix".to_string()),
+                    app_port: Some(8000),
+                    enabled: Some(true),
+                }),
+                ingress: Some(IngressBluePrint {
+                    external: Some(true),
+                    target_port: Some(8000),
+                }),
+            },
+            template: TemplateBluePrint {
+                containers: Some(vec![ContainerBluePrint {
+                    image: "node:12".to_string(),
+                    name: "remix".to_string(),
+                }]),
+            },
+        }];
+
+        assert_eq!(expected, output);
+        */
+    }
 }
