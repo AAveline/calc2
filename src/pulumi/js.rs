@@ -46,8 +46,8 @@ fn parse_line(line: &str) -> String {
 
             let mut computed = format!("{key}:{value}");
 
+            // TODO: clean that
             if value.contains("{}") {
-                println!("{computed}");
                 computed = "".to_string();
             }
             computed
@@ -192,7 +192,7 @@ mod tests {
         assert_eq!("\"key\":\"node:12.4\",", output);
 
         let output = parse_line("\"key\":\"{}\"");
-        assert_eq!("\"key\":\"{}\",", output);
+        assert_eq!("", output);
     }
 
     #[test]

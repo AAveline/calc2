@@ -38,7 +38,17 @@ const service2Image = new docker.Image("service2", {
 const frontendApp = new app.ContainerApp("frontend", {
     resourceGroupName: resourceGroup.name,
     managedEnvironmentId: managedEnv.id,
-    configuration: {    },
+    configuration: {   
+        dapr: {
+            enabled: true,
+            appPort: 8000,
+            appId: "remix"
+        },
+        ingress: {
+            external: true,
+            targetPort: 8000,
+        },
+     },
     template: {
         containers: [{
             name: "remix",
