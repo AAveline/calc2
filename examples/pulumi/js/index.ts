@@ -39,6 +39,8 @@ const frontendApp = new app.ContainerApp("frontend", {
     resourceGroupName: resourceGroup.name,
     managedEnvironmentId: managedEnv.id,
     configuration: {   
+
+
         dapr: {
             enabled: true,
             appPort: 8000,

@@ -1,6 +1,5 @@
 use crate::pulumi;
 use regex::Regex;
-use std::panic;
 
 use crate::serializer::{
     BuildContextBluePrint, ContainerAppBluePrint, ContainerAppConfiguration,
@@ -12,12 +11,11 @@ fn parse_line(line: &str) -> String {
     let re = Regex::new(r####"([a-zA-Z"]+)(:)([a-zA-Z0-9-:.`'/"\{}\[\]]+)?"####).unwrap();
 
     let captures = re.captures(&a);
-
     let computed = match captures {
         Some(c) => {
             let key = c.get(1).unwrap().as_str();
             let value = if c.get(3).is_some() {
-                let mut computed = c.get(3).unwrap().as_str();
+                let computed = c.get(3).unwrap().as_str();
                 let tokens = ["{", "[{"];
                 let has_token = tokens.contains(&computed);
 
@@ -50,10 +48,12 @@ fn parse_line(line: &str) -> String {
             if value.contains("{}") {
                 computed = "".to_string();
             }
+
             computed
         }
         None => a.to_string(),
     };
+
     computed
 }
 
@@ -137,6 +137,10 @@ fn get_apps(input: &str) -> Vec<ContainerAppBluePrint> {
 }
 
 pub fn deserialize(input: &str) -> Result<Vec<ContainerAppConfiguration>, String> {
+    let input = Regex::new(r"[^});](\n){2,}")
+        .unwrap()
+        .replace_all(input, "");
+
     let images = get_images(&input);
     let apps = get_apps(&input);
 
@@ -153,6 +157,7 @@ mod tests {
         ConfigurationBluePrint, ContainerBluePrint, DaprBluePrint, IngressBluePrint,
         TemplateBluePrint,
     };
+    use std::panic;
 
     use super::*;
 
