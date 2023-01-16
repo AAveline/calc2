@@ -1,16 +1,3 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as docker from "@pulumi/docker";
-
-import * as app from "@pulumi/azure-native/app";
-
-import {
-    resourceGroup,
-    managedEnv,
-    registry,
-    adminPassword,
-    adminUsername
-} from "./default";
-
 const remixImage = new docker.Image("remix", {
     imageName: pulumi.interpolate`${registry.loginServer}/remix:v1`,
     build: { 
@@ -51,26 +38,7 @@ const service2Image = new docker.Image("service2", {
 const frontendApp = new app.ContainerApp("frontend", {
     resourceGroupName: resourceGroup.name,
     managedEnvironmentId: managedEnv.id,
-    configuration: {
-        dapr: {
-            enabled: true,
-            appPort: 8000,
-            appId: "remix"
-        },
-        ingress: {
-            external: true,
-            targetPort: 8000,
-        },
-        registries: [{
-            server: registry.loginServer,
-            username: adminUsername,
-            passwordSecretRef: "pwd",
-        }],
-        secrets: [{
-            name: "pwd",
-            value: adminPassword,
-        }],
-    },
+    configuration: {    },
     template: {
         containers: [{
             name: "remix",

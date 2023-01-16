@@ -44,8 +44,12 @@ fn parse_line(line: &str) -> String {
                 .replace("`", "")
                 .replace("'", "");
 
-            let computed = format!("{key}:{value}");
+            let mut computed = format!("{key}:{value}");
 
+            if value.contains("{}") {
+                println!("{computed}");
+                computed = "".to_string();
+            }
             computed
         }
         None => a.to_string(),

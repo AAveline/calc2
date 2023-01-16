@@ -1,27 +1,7 @@
 version: '3.9'
 services:
   remix:
-    depends_on:
-    - placement
-    networks:
-    - dapr-network
     image: node-12
-    ports:
-    - 8000:8000
-  remix_dapr:
-    depends_on:
-    - remix
-    image: daprio/daprd:edge
-    command:
-    - ./daprd
-    - -app-id
-    - remix
-    - -app-port
-    - '8000'
-    - -placement-host-address
-    - placement:50006
-    - air
-    network_mode: service:remix
   service1:
     depends_on:
     - placement

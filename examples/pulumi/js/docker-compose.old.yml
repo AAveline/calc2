@@ -5,7 +5,7 @@ services:
     - placement
     networks:
     - dapr-network
-    image: node
+    image: node-12
     ports:
     - 8000:8000
   remix_dapr:
